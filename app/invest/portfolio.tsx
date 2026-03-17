@@ -10,8 +10,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { userPortfolio } from "../data/portfolio";
-import { transactionHistory } from "../data/trade";
+import { userPortfolio } from "../_data/portfolio";
+import { transactionHistory } from "../_data/trade";
 
 const COLORS = {
     primary: "#0A1F44", // Deep Blue

@@ -5,13 +5,12 @@ import {
     StyleSheet,
     TouchableOpacity,
     ScrollView,
-    Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-const { width } = Dimensions.get("window");
+// Width is unused
 
 const COLORS = {
     primary: "#0A1F44", // Deep Blue
@@ -114,7 +113,10 @@ export default function BusinessExecutionScreen() {
                             <Text style={styles.cardSubtitle}>Direct delivery from Savannah Partners</Text>
                         </View>
                     </View>
-                    <TouchableOpacity style={styles.orderBtn}>
+                    <TouchableOpacity
+                        style={styles.orderBtn}
+                        onPress={() => router.push("/savings/input-shop")}
+                    >
                         <Text style={styles.orderBtnText}>Open Input Shop</Text>
                         <Ionicons name="chevron-forward" size={16} color={COLORS.white} />
                     </TouchableOpacity>

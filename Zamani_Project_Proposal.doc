@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Zamani Project Proposal</title>
+<style>
+body { font-family: 'Calibri', 'Arial', sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; }
+h1 { color: #0A1F44; border-bottom: 2px solid #0A1F44; padding-bottom: 10px; }
+h2 { color: #0B3D2E; margin-top: 30px; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+h3 { color: #0A1F44; margin-top: 20px; }
+p { margin-bottom: 15px; }
+ul, ol { margin-bottom: 15px; }
+li { margin-bottom: 5px; }
+table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
+th { background-color: #f2f2f2; color: #333; }
+.footer { margin-top: 50px; font-size: 0.9em; color: #666; border-top: 1px solid #ddd; padding-top: 10px; }
+</style>
+</head>
+<body>
+
+<h1>Project Proposal: Zamani Financial Platform</h1>
+
+<p><strong>Project Name:</strong> Zamani App<br>
+<strong>Team Members:</strong><br>
+1. Abdulaziz Said - Csc6/0342/2401B<br>
+2. Brian Mwichigi - Csc6/0357/2401B</p>
+
+<h2>Overview</h2>
+<p>Zamani is a comprehensive financial empowerment platform designed to bridge the gap between traditional savings and high-value investment opportunities in Kenya. The system integrates seamless savings goals, verified investment projects (Real Estate, Agriculture, Vehicle Sourcing), and a simulated stock trading engine. <strong>Specifically tailored for both local Kenyans and the Diaspora community</strong>, Zamani enables users living abroad to securely invest, manage projects, and build wealth back home without the need for intermediaries.</p>
+
+<h2>Market Opportunity: The Diaspora Remittance Boom</h2>
+<p>The Zamani platform is positioned to capitalize on the historic growth of diaspora remittances, which serve as a critical economic engine for Kenya.</p>
+
+<h3>📊 Annual Remittances (2023–2025)</h3>
+<ul>
+    <li><strong>2023:</strong> Kenyan diaspora sent home approximately <strong>KSh 670 billion</strong> (~USD 4.19 billion).</li>
+    <li><strong>2024:</strong> Remittance inflows rose by 18% to <strong>KSh 651.7 billion</strong> (~USD 4.94 billion).</li>
+    <li><strong>2025:</strong> Diaspora remittances reached a historic high, with estimates surpassing <strong>KSh 1 trillion</strong> by late 2025.</li>
+    <li><em>Note: Other sources estimate the 2025 total at KSh 649.9 billion (~USD 5.037 billion), reflecting different measurement periods.</em></li>
+</ul>
+
+<h3>🗓 Remittances in Early 2026</h3>
+<ul>
+    <li><strong>January 2026:</strong> Inflows recorded at approximately <strong>KSh 53 billion</strong> (~USD 411 million).</li>
+    <li>While slightly lower than January 2025 (KSh 55.1 billion), the 12-month cumulative inflows show a <strong>1.2% year-over-year growth</strong>, signaling sustained momentum.</li>
+</ul>
+
+<p>Zamani provides the necessary infrastructure to channel these funds into productive, wealth-generating assets rather than consumption alone.</p>
+
+<h2>🚀 Strategic Impact & Growth Strategies</h2>
+<p>Zamani aims to increase diaspora remittances through five key pillars:</p>
+
+<h3>A. Streamlined Transfer Process</h3>
+<ul>
+    <li><strong>Current Problem:</strong> High fees, delays, and currency losses.</li>
+    <li><strong>Zamani Solution:</strong> Direct, low-cost money transfers with instant multiple currency options. Funds can be split automatically into household support, investments, or infrastructure projects.</li>
+    <li><strong>Impact:</strong> Easier, faster, cheaper transfers → higher total inflows.</li>
+</ul>
+
+<h3>B. Investment-Linked Remittances</h3>
+<ul>
+    <li><strong>Concept:</strong> Instead of just consumption, part of the remittance becomes productive capital.</li>
+    <li><strong>Implementation:</strong> Direct investment in Real Estate (residential/commercial), Agriculture (farms/cooperatives), and Infrastructure (solar/water/roads).</li>
+    <li><strong>Impact:</strong> Users are motivated by financial returns, increasing remittance volume.</li>
+</ul>
+
+<h3>C. Financial Literacy & Incentives</h3>
+<ul>
+    <li><strong>Education:</strong> Micro-modules showing how funds grow over time and tax benefits for diaspora investments.</li>
+    <li><strong>Impact:</strong> Informed diaspora send more funds strategically.</li>
+</ul>
+
+<h3>D. Gamification & Community Features</h3>
+<ul>
+    <li><strong>Engagement:</strong> Leaderboards and milestones (e.g., “You funded 3 homes this year”).</li>
+    <li><strong>Impact:</strong> Emotional connection and social proof encourage higher contributions.</li>
+</ul>
+
+<h3>E. Strategic Partnerships</h3>
+<ul>
+    <li><strong>Integration:</strong> Direct bank deposits, M-Pesa, PayPal, and credit card options.</li>
+    <li><strong>Impact:</strong> Removing barriers leads to higher total transactions.</li>
+</ul>
+
+<h2>🤝 Stakeholder Benefits</h2>
+<table>
+    <tr>
+        <th>Partner Type</th>
+        <th>Benefits</th>
+    </tr>
+    <tr>
+        <td><strong>Banks (Kenya + Diaspora)</strong></td>
+        <td>Increased inbound remittance volumes; Lower customer acquisition costs; Cross-selling opportunities (loans, mortgages).</td>
+    </tr>
+    <tr>
+        <td><strong>Fintech/Payment Platforms</strong></td>
+        <td>Transaction fees from higher volume; Expanded user base; Brand visibility in diaspora communities.</td>
+    </tr>
+    <tr>
+        <td><strong>Government / CBK</strong></td>
+        <td>Increased foreign currency inflow strengthens the Kenyan shilling; Transparent remittance tracking; Boosts national savings.</td>
+    </tr>
+    <tr>
+        <td><strong>Investors (VCs / Impact)</strong></td>
+        <td>Returns from equity/platform fees; Positive ESG/impact investment story; Access to a growing African market.</td>
+    </tr>
+    <tr>
+        <td><strong>Local Entrepreneurs</strong></td>
+        <td>Access to funding for projects; Faster project completion; Increased visibility.</td>
+    </tr>
+    <tr>
+        <td><strong>Diaspora Users</strong></td>
+        <td>Lower-cost transfers; Investment opportunities back home; Transparency on fund usage; Potential financial returns.</td>
+    </tr>
+</table>
+
+<h2>📈 Projected Impact</h2>
+<p>If Zamani captures even a conservative <strong>5–10%</strong> of current diaspora remittances (~KSh 670 billion base):</p>
+<ul>
+    <li><strong>Projected Volume via App:</strong> <strong>KSh 33.5 – 67 Billion / Year</strong></li>
+    <li><strong>Long-Term Projection:</strong> With investment returns and reinvestment, annual inflows could push toward <strong>KSh 100 Billion+</strong> over 3–5 years.</li>
+</ul>
+
+<h2>Key Objectives</h2>
+<ul>
+    <li><strong>Empower the Diaspora:</strong> Provide a transparent, direct channel for Kenyans living abroad to invest in real estate and business ventures.</li>
+    <li><strong>Encourage Savings Culture:</strong> Provide goal-oriented savings tools with automated tracking.</li>
+    <li><strong>Democratize Investment:</strong> Offer fractional and full access to vetted high-yield opportunities.</li>
+    <li><strong>Enhance Financial Literacy:</strong> Introduce users to Kenyan market dynamics through simulated trading.</li>
+    <li><strong>Secure Asset Acquisition:</strong> Facilitate safe and transparent purchase processes.</li>
+    <li><strong>Support Business Growth:</strong> Provide capital to entrepreneurs based on business viability.</li>
+</ul>
+
+<h2>Project Scope</h2>
+<ol>
+    <li><strong>Global Accessibility:</strong> Mobile-first design optimized for users worldwide.</li>
+    <li><strong>User Authentication:</strong> Secure registration with biometric support.</li>
+    <li><strong>Savings Module:</strong> Creation and management of flexible savings goals.</li>
+    <li><strong>Investment Marketplace:</strong> A curated listing of verified opportunities.</li>
+    <li><strong>Trading Simulation:</strong> A mock NSE trading floor.</li>
+    <li><strong>Business Intelligence:</strong> ROI analysis tools.</li>
+    <li><strong>Secure Payments Integration:</strong> M-Pesa and international gateways.</li>
+</ol>
+
+<h2>System Architecture</h2>
+<ul>
+    <li><strong>Frontend:</strong> React Native (Expo).</li>
+    <li><strong>Backend & Database:</strong> Scalable cloud infrastructure (Firebase/Supabase).</li>
+    <li><strong>APIs:</strong> Financial gateways and market data providers.</li>
+    <li><strong>Security:</strong> High-grade encryption.</li>
+</ul>
+
+<h2>Estimated Budget (KSh)</h2>
+<table>
+    <tr>
+        <th>Item</th>
+        <th>Purpose</th>
+        <th>Estimated Cost (KSh)</th>
+    </tr>
+    <tr>
+        <td><strong>Cloud Hosting</strong></td>
+        <td>Database, Auth, and Backend Services</td>
+        <td>4,000</td>
+    </tr>
+    <tr>
+        <td><strong>API Access</strong></td>
+        <td>Financial Data & SMS/Payment Gateways</td>
+        <td>4,000</td>
+    </tr>
+    <tr>
+        <td><strong>Development</strong></td>
+        <td>System Design & Coding (Team Time)</td>
+        <td>-</td>
+    </tr>
+    <tr>
+        <td><strong>Hardware</strong></td>
+        <td>Projector for Demonstration</td>
+        <td>Provided</td>
+    </tr>
+    <tr>
+        <td><strong>Total</strong></td>
+        <td></td>
+        <td><strong>8,000</strong></td>
+    </tr>
+</table>
+
+<div class="footer">
+    <p><strong>Prepared By:</strong><br>
+    Abdulaziz Said (Csc6/0342/2401B) & Brian Mwichigi (Csc6/0357/2401B)<br>
+    <strong>Date:</strong> February 2026</p>
+</div>
+
+</body>
+</html>

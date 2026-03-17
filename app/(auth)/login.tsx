@@ -9,12 +9,14 @@ import {
     Platform,
     ScrollView,
     StatusBar,
-    Image
+    Image,
+    Alert
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ZamaniLoader } from "../../components/ZamaniLoader";
+import { authService } from "../config/authService";
 
 const COLORS = {
     primary: "#0A1F44", // Deep Blue
@@ -36,13 +38,22 @@ export default function Login() {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleLogin = () => {
+    const handleLogin = async () => {
+        if (!email || !password) {
+            Alert.alert("Error", "Please enter your email and password.");
+            return;
+        }
+
         setIsLoading(true);
-        // Simulate network request
-        setTimeout(() => {
-            setIsLoading(false);
+        try {
+            await authService.login(email, password);
             router.replace("/home");
-        }, 2000);
+        } catch (error: any) {
+            console.error("Login error:", error);
+            Alert.alert("Login Failed", error.message || "Invalid email or password.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     if (isLoading) {
@@ -127,7 +138,7 @@ export default function Login() {
                         </TouchableOpacity>
 
                         <View style={styles.footer}>
-                            <Text style={styles.footerText}>Don't have an account? </Text>
+                            <Text style={styles.footerText}>Don&apos;t have an account? </Text>
                             <TouchableOpacity onPress={() => router.push("/signup")}>
                                 <Text style={styles.signUpText}>Sign Up</Text>
                             </TouchableOpacity>

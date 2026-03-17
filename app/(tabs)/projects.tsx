@@ -12,11 +12,16 @@ import {
     Modal,
     TextInput,
     KeyboardAvoidingView,
-    Platform
+    Platform,
+    Alert
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
+import { API_URL } from "../config/authService";
+import { auth } from "../config/firebase";
+import axios from "axios";
+import { convertCurrency, formatCurrency, parsePrice } from "../../constants/currency";
 
 const { width, height } = Dimensions.get("window");
 
@@ -58,6 +63,7 @@ export default function ProjectsScreen() {
     const [selectedRegion, setSelectedRegion] = useState("Nairobi");
     const [selectedArea, setSelectedArea] = useState("All Areas");
     const [selectedSubCategory, setSelectedSubCategory] = useState("All");
+    const [searchQuery, setSearchQuery] = useState("");
     const [showFilters, setShowFilters] = useState(false);
     const [showRequestModal, setShowRequestModal] = useState(false);
     const [showBizResearchModal, setShowBizResearchModal] = useState(false);
@@ -72,7 +78,10 @@ export default function ProjectsScreen() {
         budget: "",
         timeline: "ASAP",
         importPref: "Any",
+        sourcingLocation: "Any",
     });
+    const [userProfile, setUserProfile] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
     // Advanced Filter State
     const [filters, setFilters] = useState<Filters>({
@@ -96,9 +105,9 @@ export default function ProjectsScreen() {
 
     const categories = [
         { id: "1", name: "Managed Lands", icon: "map" },
-        { id: "2", name: "Real Estate", icon: "business" },
+        { id: "2", name: "Build or Buy a House", icon: "business" },
         { id: "3", name: "Vehicle Sourcing", icon: "car-sport" },
-        { id: "4", name: "Infrastructure", icon: "construct" },
+        { id: "4", name: "Utilities and Products", icon: "cart" },
         { id: "5", name: "Business Opps", icon: "bulb" },
         { id: "6", name: "Kenyan Markets", icon: "trending-up" },
     ];
@@ -106,9 +115,9 @@ export default function ProjectsScreen() {
     const regions = ["All Regions", "Nairobi", "Rift Valley", "Central", "Coast", "Eastern"];
     const nairobiAreas = ["All Areas", "Syokimau", "Karen", "Kasarani", "Kitengela", "Ruai", "Kilimani"];
 
-    const reSubCategories = ["All", "Apartments", "Villas", "Townhouses", "Off-plan", "Rental Units"];
-    const vehSubCategories = ["All", "SUVs", "Sedans", "Pickups", "Electric", "Luxury", "Buses"];
-    const infSubCategories = ["All", "Residential", "Commercial", "Utilities"];
+    const reSubCategories = ["All", "Apartments", "Rental Units", "Residential Houses", "Commercial Properties"];
+    const vehSubCategories = ["All", "SUVs", "Sedans", "Motorbikes", "Pickups", "Electric", "Luxury", "Buses"];
+    const utilSubCategories = ["All", "Furniture", "Home Appliances", "Farming Utilities", "Building Utilities", "Others"];
     const bizCategories = [
         {
             id: "biz_a",
@@ -175,6 +184,18 @@ export default function ProjectsScreen() {
         }
     ];
 
+    const getSearchPlaceholder = () => {
+        switch (selectedSector) {
+            case "Managed Lands": return "Search by location, size or title...";
+            case "Build or Buy a House": return "Search for house types, bedrooms...";
+            case "Vehicle Sourcing": return "Search by make, model or specs...";
+            case "Utilities and Products": return "Search for products or sellers...";
+            case "Business Opps": return "Search business sectors or ideas...";
+            case "Kenyan Markets": return "Search stocks or symbols...";
+            default: return "Search projects...";
+        }
+    };
+
     const hottestDeals = [
         // Land Deals
         {
@@ -182,34 +203,56 @@ export default function ProjectsScreen() {
             title: "Syokimau Prime Plots",
             category: "Managed Lands",
             location: "Syokimau, Nairobi",
-            roi: "25%",
+            roi: "",
             price: "KSh 1.2M",
             image: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=600&auto=format&fit=crop",
-            tag: "MOST VIEWED",
+            tag: "PRIME LOCATION",
             tagColor: COLORS.primary
         },
         // Real Estate Deals
         {
             id: "hot_re_1",
             title: "Westlands Luxury Lofts",
-            category: "Real Estate",
+            category: "Build or Buy a House",
             location: "Westlands, Nairobi",
-            roi: "7.5% Yield",
+            roi: "",
             price: "KSh 9.5M",
             image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?q=80&w=600&auto=format&fit=crop",
-            tag: "HIGH YIELD",
+            tag: "LUXURY",
             tagColor: COLORS.success
         },
         {
             id: "hot_re_2",
             title: "Karen Heights Villa",
-            category: "Real Estate",
+            category: "Build or Buy a House",
             location: "Karen, Nairobi",
-            roi: "15% ROI",
+            roi: "",
             price: "KSh 45M",
             image: "https://images.unsplash.com/photo-1613490493576-7fde63acd811?q=80&w=600&auto=format&fit=crop",
-            tag: "LIMITED UNITS",
+            tag: "PRIME ASSET",
             tagColor: COLORS.danger
+        },
+        {
+            id: "hot_re_3",
+            title: "Kasarani Rental Suite",
+            category: "Build or Buy a House",
+            location: "Kasarani, Nairobi",
+            roi: "",
+            price: "KSh 12M",
+            image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=600&auto=format&fit=crop",
+            tag: "HIGH INCOME",
+            tagColor: COLORS.secondary
+        },
+        {
+            id: "hot_re_hotel",
+            title: "Elementaita Boutique Hotel",
+            category: "Build or Buy a House",
+            location: "Naivasha, Rift Valley",
+            roi: "",
+            price: "KSh 65M",
+            image: "https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=600&auto=format&fit=crop",
+            tag: "PREMIUM ASSET",
+            tagColor: COLORS.heritageAccent
         },
         // Vehicle Deals
         {
@@ -221,7 +264,8 @@ export default function ProjectsScreen() {
             price: "KSh 5.8M",
             image: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=600&auto=format&fit=crop",
             tag: "BEST SELLER",
-            tagColor: COLORS.primary
+            tagColor: COLORS.primary,
+            partner: "Toyota Kenya"
         },
         {
             id: "hot_veh_2",
@@ -232,492 +276,158 @@ export default function ProjectsScreen() {
             price: "Import Flow",
             image: "https://images.unsplash.com/photo-1583121274602-3e2820c69888?q=80&w=600&auto=format&fit=crop",
             tag: "DIASPORA FAVORITE",
-            tagColor: COLORS.success
-        },
-        // Infrastructure Deals
-        {
-            id: "hot_inf_1",
-            title: "Modern 3-Bed Villa",
-            category: "Infrastructure",
-            location: "Syokimau, Nairobi",
-            roi: "12% Yield",
-            price: "KSh 12M",
-            image: "https://images.unsplash.com/photo-1613490493576-7fde63acd811?q=80&w=600&auto=format&fit=crop",
-            tag: "BUILDING NOW",
-            tagColor: COLORS.primary
+            tagColor: COLORS.success,
+            partner: "SBT Japan"
         },
         {
-            id: "hot_inf_2",
-            title: "Athi River Warehouse",
-            category: "Infrastructure",
-            location: "Athi River",
-            roi: "15% ROI",
-            price: "KSh 8M",
-            image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=600&auto=format&fit=crop",
-            tag: "COMMERCIAL",
-            tagColor: COLORS.secondary
-        }
-    ];
-
-    const allProjects = [
-        {
-            id: "1",
-            title: "Rift Valley Macro-Farm",
-            category: "Managed Lands",
-            location: "Narok",
-            region: "Rift Valley",
-            area: "Narok",
-            roi: "18%",
-            raised: "KSh 15.4M",
-            target: "KSh 20M",
-            progress: 0.77,
-            status: "Funding",
-            image: "https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=400&auto=format&fit=crop",
-            features: { nearTarmac: true, utilities: true, serviced: true },
-            priceNum: 500000,
-            titleType: "Freehold",
-            bedrooms: 0,
-            roiValue: 18,
-            completionTimeValue: 0
-        },
-        {
-            id: "prop001",
-            title: "Modern 2 Bed - Westlands",
-            category: "Real Estate",
-            location: "Westlands",
-            region: "Nairobi",
-            area: "Westlands",
-            roi: "7.5% Yield",
-            type: "Apartment",
-            bedrooms: 2,
-            bathrooms: 2,
-            priceNum: 9500000,
-            raised: "KSh 60M",
-            target: "KSh 100M",
-            progress: 0.60,
-            status: "Funding",
-            image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?q=80&w=400&auto=format&fit=crop",
-            verified: true,
-            offPlan: false
-        },
-        {
-            id: "prop002",
-            title: "Off-Plan 3 Bed Villa",
-            category: "Real Estate",
-            location: "Syokimau",
-            region: "Nairobi",
-            area: "Syokimau",
-            roi: "15% ROI",
-            type: "Villa",
-            bedrooms: 3,
-            bathrooms: 3,
-            priceNum: 12500000,
-            raised: "KSh 20M",
-            target: "KSh 80M",
-            progress: 0.25,
-            status: "Funding",
-            image: "https://images.unsplash.com/photo-1613490493576-7fde63acd811?q=80&w=400&auto=format&fit=crop",
-            verified: true,
-            offPlan: true,
-            completionDate: "2027-06"
-        },
-        {
-            id: "4",
-            title: "Kasarani Heights Plots",
-            category: "Managed Lands",
-            location: "Kasarani",
-            region: "Nairobi",
-            area: "Kasarani",
-            roi: "20%",
-            raised: "KSh 8M",
-            target: "KSh 15M",
-            progress: 0.53,
-            status: "Funding",
-            image: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=400&auto=format&fit=crop",
-            features: { nearTarmac: true, utilities: false, serviced: false },
-            priceNum: 1500000,
-            titleType: "Freehold"
-        },
-        {
-            id: "veh001",
-            title: "2018 Toyota Prado TX-L",
+            id: "hot_veh_3",
+            title: "2020 Land Rover Defender",
             category: "Vehicle Sourcing",
-            location: "Westlands",
-            region: "Nairobi",
-            area: "Westlands",
-            roi: "Verified Dealer",
-            type: "SUVs",
-            make: "Toyota",
-            model: "Prado",
-            year: 2018,
-            mileage: "72,000 km",
-            transmission: "Automatic",
-            condition: "Used",
-            importOrLocal: "Local",
-            priceNum: 5800000,
-            raised: "KSh 5.8M",
-            target: "Ready Stock",
-            progress: 1.0,
-            status: "Executing",
-            image: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=400&auto=format&fit=crop",
-            verified: true,
-            partner: "Toyota Kenya"
+            location: "Import from UK",
+            roi: "Est. $65,000",
+            price: "Premium Flow",
+            image: "https://images.unsplash.com/photo-1590333745422-990422998e3b?q=80&w=600&auto=format&fit=crop",
+            tag: "PREMIUM",
+            tagColor: COLORS.primary,
+            partner: "UK Global Motors"
         },
         {
-            id: "veh_imp_001",
-            title: "2019 Toyota Harrier",
+            id: "hot_veh_4",
+            title: "2021 Mercedes-Benz C200",
             category: "Vehicle Sourcing",
-            location: "Japan",
-            region: "All Regions",
-            area: "Import",
-            roi: "Est. Total: $18,300",
-            type: "SUVs",
-            make: "Toyota",
-            model: "Harrier",
-            year: 2019,
-            mileage: "45,000 km",
-            transmission: "Automatic",
-            condition: "Used",
-            importOrLocal: "Import",
-            priceNum: 2300000, // Approximate KSh equivalent for base
-            raised: "$12,000 (FOB)",
-            target: "$18,300 (Total)",
-            progress: 0.0,
-            status: "Funding",
+            location: "Mombasa, Kenya",
+            roi: "Verified Unit",
+            price: "KSh 6.4M",
+            image: "https://images.unsplash.com/photo-1620212000557-41829e05f699?q=80&w=600&auto=format&fit=crop",
+            tag: "LOW MILEAGE",
+            tagColor: COLORS.secondary,
+            partner: "CarWorld Kenya"
+        },
+        {
+            id: "hot_veh_5",
+            title: "2019 Toyota Rav4 Hybrid",
+            category: "Vehicle Sourcing",
+            location: "Westlands, Nairobi",
+            roi: "Fuel Efficient",
+            price: "KSh 4.2M",
             image: "https://images.unsplash.com/photo-1583121274602-3e2820c69888?q=80&w=400&auto=format&fit=crop",
-            verified: true,
-            importSummary: {
-                fob: "$12,000",
-                shipping: "$1,500",
-                duty: "$4,200",
-                clearing: "$600"
-            }
+            tag: "HYBRID",
+            tagColor: COLORS.success,
+            partner: "EcoCars Nairobi"
         },
         {
-            id: "res001",
-            title: "Modern 3-Bedroom Villa",
-            category: "Infrastructure",
-            location: "Syokimau",
-            region: "Nairobi",
-            area: "Syokimau",
-            roi: "12% Yield",
-            type: "Residential",
-            priceNum: 12000000,
-            estimatedCost: "KSh 12M",
-            completionTime: "12 months",
-            raised: "KSh 4.8M",
-            target: "KSh 12M",
-            progress: 0.4,
-            status: "Executing",
-            image: "https://images.unsplash.com/photo-1613490493576-7fde63acd811?q=80&w=400&auto=format&fit=crop",
-            verified: true,
-            developer: "GreenBuild Ltd",
-            completionTimeValue: 12,
-            features: { nearTarmac: true, utilities: true, serviced: true },
-            bedrooms: 3,
-            titleType: "Leasehold"
+            id: "hot_veh_bike_1",
+            title: "2022 BMW R1250 GS",
+            category: "Vehicle Sourcing",
+            location: "Import from Germany",
+            roi: "Adventure King",
+            price: "Est. $24,500",
+            image: "https://images.unsplash.com/photo-1558981403-c5f91cbba527?q=80&w=600&auto=format&fit=crop",
+            tag: "PREMIUM BIKE",
+            tagColor: COLORS.heritageAccent,
+            partner: "Bavarian Motors"
+        },
+        // Utilities and Products Deals
+        {
+            id: "hot_util_1",
+            title: "Eco-Smart Solar Heater",
+            category: "Utilities and Products",
+            location: "Nairobi Warehouse",
+            roi: "",
+            price: "KSh 65,000",
+            image: "https://images.unsplash.com/photo-1509391366360-feaf9fa44853?q=80&w=400&auto=format&fit=crop",
+            tag: "",
+            tagColor: "transparent",
+            partner: "EcoPower Ltd"
         },
         {
-            id: "com001",
-            title: "Warehouse - Athi River",
-            category: "Infrastructure",
-            location: "Athi River",
-            region: "Eastern",
-            area: "Athi River",
-            roi: "15% ROI",
-            type: "Commercial",
-            priceNum: 8000000,
-            estimatedCost: "KSh 8M",
-            completionTime: "10 months",
-            raised: "KSh 2M",
-            target: "KSh 8M",
-            progress: 0.25,
-            status: "Funding",
-            image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=400&auto=format&fit=crop",
-            verified: true,
-            developer: "QuickStore Ltd",
-            completionTimeValue: 10,
-            features: { nearTarmac: true, utilities: true, serviced: true },
-            bedrooms: 0,
-            titleType: "Leasehold"
-        },
-        // Business Opportunities
-        // Agriculture & Agribusiness
-        {
-            id: "biz_001",
-            title: "Poultry Farming (Layers)",
-            category: "Business Opps",
-            subCategory: "Agriculture & Agribusiness",
-            location: "Kiambu",
-            region: "Central",
-            area: "Kiambu",
-            roi: "35% Profit",
-            capital: "KSh 400K",
-            revenue: "KSh 120K /mo",
-            risk: "Medium",
-            demand: "High",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1516467508483-a7212febe31a?q=80&w=400&auto=format&fit=crop",
-            verified: true
+            id: "hot_util_2",
+            title: "Mahogany Executive Desk",
+            category: "Utilities and Products",
+            location: "Mombasa Branch",
+            roi: "",
+            price: "KSh 45,000",
+            image: "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?q=80&w=400&auto=format&fit=crop",
+            tag: "",
+            tagColor: "transparent",
+            partner: "Heritage Furniture"
         },
         {
-            id: "biz_ag_002",
-            title: "Greenhouse Tomato Farming",
-            category: "Business Opps",
-            subCategory: "Agriculture & Agribusiness",
-            location: "Isinya",
-            region: "Nairobi",
-            area: "Isinya",
-            roi: "45% Profit",
-            capital: "KSh 850K",
-            revenue: "KSh 250K /mo",
-            risk: "Medium",
-            demand: "Very High",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?q=80&w=400&auto=format&fit=crop",
-            verified: true
+            id: "hot_util_3",
+            title: "Solar Water Pump 5HP",
+            category: "Utilities and Products",
+            location: "Rift Valley Hub",
+            roi: "",
+            price: "KSh 85,000",
+            image: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=400&auto=format&fit=crop",
+            tag: "",
+            tagColor: "transparent",
+            partner: "AgriTech Solutions"
         },
         {
-            id: "biz_ag_003",
-            title: "Tilapia Fish Farming",
-            category: "Business Opps",
-            subCategory: "Agriculture & Agribusiness",
-            location: "Sagana",
-            region: "Central",
-            area: "Sagana",
-            roi: "30% Profit",
-            capital: "KSh 1.2M",
-            revenue: "KSh 320K /mo",
-            risk: "Medium",
-            demand: "Stable",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1534123234659-33827ec50901?q=80&w=400&auto=format&fit=crop",
-            verified: true
-        },
-        // Retail & Trade Businesses
-        {
-            id: "biz_002",
-            title: "Milk ATM & Dairy Shop",
-            category: "Business Opps",
-            subCategory: "Retail & Trade Businesses",
-            location: "Roysambu",
-            region: "Nairobi",
-            area: "Roysambu",
-            roi: "25% Profit",
-            capital: "KSh 650K",
-            revenue: "KSh 180K /mo",
-            risk: "Low",
-            demand: "Stable",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1550583724-125581cc2556?q=80&w=400&auto=format&fit=crop",
-            verified: true
-        },
-        {
-            id: "biz_rt_003",
-            title: "Hardware & Paint Store",
-            category: "Business Opps",
-            subCategory: "Retail & Trade Businesses",
-            location: "Kitengela",
-            region: "Nairobi",
-            area: "Kitengela",
-            roi: "20% Profit",
-            capital: "KSh 2.2M",
-            revenue: "KSh 450K /mo",
-            risk: "Low",
-            demand: "Growing",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1530124560676-476df08409ba?q=80&w=400&auto=format&fit=crop",
-            verified: true
-        },
-        // Manufacturing & Value Addition
-        {
-            id: "biz_003",
-            title: "Executive Car Wash",
-            category: "Business Opps",
-            subCategory: "Manufacturing & Value Addition",
-            location: "Kilimani",
-            region: "Nairobi",
-            area: "Kilimani",
-            roi: "40% Profit",
-            capital: "KSh 1.2M",
-            revenue: "KSh 350K /mo",
-            risk: "Medium",
-            demand: "High",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?q=80&w=400&auto=format&fit=crop",
-            verified: true
-        },
-        {
-            id: "biz_mv_002",
-            title: "Maize Milling (Value Add)",
-            category: "Business Opps",
-            subCategory: "Manufacturing & Value Addition",
-            location: "Eldoret",
-            region: "Rift Valley",
-            area: "Eldoret",
-            roi: "30% Profit",
-            capital: "KSh 1.5M",
-            revenue: "KSh 400K /mo",
-            risk: "Medium",
-            demand: "Very High",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1545167622-3a6ac756afa4?q=80&w=400&auto=format&fit=crop",
-            verified: true
-        },
-        {
-            id: "biz_mv_003",
-            title: "Bottled Water Production",
-            category: "Business Opps",
-            subCategory: "Manufacturing & Value Addition",
-            location: "Machakos",
-            region: "Eastern",
-            area: "Machakos",
-            roi: "35% Profit",
-            capital: "KSh 2.8M",
-            revenue: "KSh 700K /mo",
-            risk: "Medium",
-            demand: "High",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1523362622744-8cc11535201b?q=80&w=400&auto=format&fit=crop",
-            verified: true
-        },
-        // Transport & Logistics
-        {
-            id: "biz_004",
-            title: "LPG Gas Distribution",
-            category: "Business Opps",
-            subCategory: "Transport & Logistics",
-            location: "Nakuru",
-            region: "Rift Valley",
-            area: "Nakuru",
-            roi: "20% Profit",
-            capital: "KSh 800K",
-            revenue: "KSh 220K /mo",
-            risk: "Low",
-            demand: "High",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=400&auto=format&fit=crop",
-            verified: true
-        },
-        {
-            id: "biz_tl_002",
-            title: "E-Boda Courier Fleet",
-            category: "Business Opps",
-            subCategory: "Transport & Logistics",
-            location: "Nairobi",
-            region: "Nairobi",
-            area: "Westlands",
-            roi: "40% Profit",
-            capital: "KSh 1.5M",
-            revenue: "KSh 280K /mo",
-            risk: "Medium",
-            demand: "Surging",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1558981403-c5f97dbbe480?q=80&w=400&auto=format&fit=crop",
-            verified: true
-        },
-        {
-            id: "biz_tl_003",
-            title: "Inter-County Shuttle",
-            category: "Business Opps",
-            subCategory: "Transport & Logistics",
-            location: "Eldoret - Nairobi",
-            region: "Rift Valley",
-            area: "Eldoret",
-            roi: "35% Profit",
-            capital: "KSh 4.5M",
-            revenue: "KSh 600K /mo",
-            risk: "High",
-            demand: "High",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=400&auto=format&fit=crop",
-            verified: true
-        },
-        // Real Estate & Rental Business
-        {
-            id: "biz_005",
-            title: "Short-stay (Airbnb) Apt",
-            category: "Business Opps",
-            subCategory: "Real Estate & Rental Business",
-            location: "Nyali",
-            region: "Coast",
-            area: "Nyali",
-            roi: "18% Yield",
-            capital: "KSh 2.5M",
-            revenue: "KSh 150K /mo",
-            risk: "Low",
-            demand: "High",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=400&auto=format&fit=crop",
-            verified: true
-        },
-        {
-            id: "biz_re_002",
-            title: "Student Hostel (12 Rooms)",
-            category: "Business Opps",
-            subCategory: "Real Estate & Rental Business",
-            location: "Juja",
-            region: "Central",
-            area: "Juja",
-            roi: "12% Yield",
-            capital: "KSh 8.5M",
-            revenue: "KSh 180K /mo",
-            risk: "Low",
-            demand: "Constant",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1555854817-5b2260d15d49?q=80&w=400&auto=format&fit=crop",
-            verified: true
-        },
-        {
-            id: "biz_re_003",
-            title: "Container Shop Units",
-            category: "Business Opps",
-            subCategory: "Real Estate & Rental Business",
-            location: "Kamiti Road",
-            region: "Nairobi",
-            area: "Roysambu",
-            roi: "22% Yield",
-            capital: "KSh 1.8M",
-            revenue: "KSh 95K /mo",
-            risk: "Low",
-            demand: "High",
-            progress: 0,
-            status: "Ready",
-            image: "https://images.unsplash.com/photo-1493106819501-66d381c466f1?q=80&w=400&auto=format&fit=crop",
-            verified: true
-        },
-        {
-            id: "biz_006",
-            title: "Cyber Cafe & Gaming Hub",
-            category: "Business Opps",
-            subCategory: "Retail & Trade Businesses",
-            location: "Juja",
-            region: "Central",
-            area: "Juja",
-            roi: "30% Profit",
-            capital: "KSh 500K",
-            revenue: "KSh 140K /mo",
-            risk: "Low",
-            demand: "High",
-            progress: 0,
-            image: "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=400&auto=format&fit=crop",
-            verified: true
+            id: "hot_util_4",
+            title: "Samsung Smart Fridge",
+            category: "Utilities and Products",
+            location: "Nairobi CBD",
+            roi: "",
+            price: "KSh 120,000",
+            image: "https://images.unsplash.com/photo-1571175432230-01c288a399bb?q=80&w=400&auto=format&fit=crop",
+            tag: "",
+            tagColor: "transparent",
+            partner: "Hotpoint Kenya"
         }
     ];
 
+    const [allProjects, setAllProjects] = useState<any[]>([]);
+
+    const fetchData = React.useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            const [projectsRes, profileRes] = await Promise.all([
+                axios.get(`${API_URL}/projects`),
+                token ? axios.get(`${API_URL}/users/me`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                }) : Promise.resolve({ data: null })
+            ]);
+
+            const data = projectsRes.data;
+            setUserProfile(profileRes.data);
+
+            const formatted = data.map((item: any) => {
+                return {
+                    ...item,
+                    ...item.metadata,
+                    id: item._id,
+                    image: item.images?.[0] || item.metadata?.image || 'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=400&auto=format&fit=crop',
+                    tag: item.metadata?.tag || item.tags?.[0]?.label || '',
+                    tagColor: item.tags?.[0]?.color || undefined,
+                    priceNum: item.targetAmount || parsePrice(item.price),
+                    raisedNum: item.currentAmount || parsePrice(item.metadata?.raised),
+                    type: item.subCategory || item.metadata?.propertyType || item.metadata?.source || item.category,
+                    features: {
+                        nearTarmac: item.metadata?.isNearTarmac || item.metadata?.nearTarmac,
+                        utilities: item.metadata?.hasUtilities || item.metadata?.utilities,
+                        serviced: item.metadata?.isServiced || item.metadata?.serviced
+                    }
+                };
+            });
+            setAllProjects(formatted);
+        } catch (err) {
+            console.error('Failed to fetch projects:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            fetchData();
+        }, [fetchData])
+    );
+
+    const currencySymbol = userProfile?.currencySymbol || "KSh";
+    const preferredCurrency = userProfile?.preferredCurrency || "KES";
     const filteredProjects = allProjects.filter(p => {
         const matchRegion = selectedRegion === "All Regions" || p.region === selectedRegion;
         const matchSector = p.category === selectedSector;
@@ -725,8 +435,8 @@ export default function ProjectsScreen() {
 
         // Sub-category matching
         let matchSubCat = true;
-        if (selectedSector === "Real Estate") {
-            matchSubCat = selectedSubCategory === "All" || p.type === selectedSubCategory.replace(" Units", "");
+        if (selectedSector === "Build or Buy a House") {
+            matchSubCat = selectedSubCategory === "All" || p.type === selectedSubCategory;
         } else if (selectedSector === "Vehicle Sourcing") {
             matchSubCat = selectedSubCategory === "All" || p.type === selectedSubCategory;
         } else if (selectedSector === "Infrastructure") {
@@ -764,13 +474,25 @@ export default function ProjectsScreen() {
                     filters.infraTimeline === "1yr+" ? (p.completionTimeValue || 0) > 12 :
                         filters.infraTimeline === "2yrs+" ? (p.completionTimeValue || 0) > 24 : true
         );
-        const matchContractor = !filters.contractor || p.developer?.toLowerCase().includes(filters.contractor.toLowerCase());
+        const matchContractor = !filters.contractor ||
+            ((p as any).developer?.toLowerCase().includes(filters.contractor.toLowerCase())) ||
+            ((p as any).partner?.toLowerCase().includes(filters.contractor.toLowerCase()));
+
+        // Search Filter
+        const searchLower = searchQuery.toLowerCase();
+        const matchSearch = searchQuery === "" ||
+            p.title?.toLowerCase().includes(searchLower) ||
+            p.location?.toLowerCase().includes(searchLower) ||
+            p.description?.toLowerCase().includes(searchLower) ||
+            (p as any).make?.toLowerCase().includes(searchLower) ||
+            (p as any).model?.toLowerCase().includes(searchLower) ||
+            (p as any).partner?.toLowerCase().includes(searchLower);
 
         return matchRegion && matchSector && matchArea && matchSubCat && matchBudget &&
             matchTitle && matchTarmac && matchUtilities && matchServiced &&
             matchBedrooms && matchYield &&
             matchMake && matchTrans && matchCond && matchImp &&
-            matchInfTimeline && matchContractor;
+            matchInfTimeline && matchContractor && matchSearch;
     });
 
     const FilterOption = ({ label, active, onPress }: { label: string, active: boolean, onPress: () => void }) => (
@@ -801,11 +523,7 @@ export default function ProjectsScreen() {
             >
                 {/* Hottest Deals Carousel */}
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>
-                        {selectedSector === "Real Estate" ? "🔥 Hottest Real Estate" :
-                            selectedSector === "Vehicle Sourcing" ? `🔥 Hottest Deals in ${selectedRegion}` :
-                                "🔥 Hottest Land Deals"}
-                    </Text>
+                    <Text style={styles.sectionTitle}>🔥 Hottest Deals</Text>
                     <Text style={styles.locationTag}>{selectedRegion}</Text>
                 </View>
                 <ScrollView
@@ -813,27 +531,48 @@ export default function ProjectsScreen() {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.hotDealsScroll}
                 >
-                    {hottestDeals
+                    {allProjects.filter(p => p.isHotDeal)
                         .filter(deal => deal.category === selectedSector)
                         .map((deal) => (
-                            <TouchableOpacity key={deal.id} style={styles.hotDealCard}>
+                            <TouchableOpacity
+                                key={deal.id}
+                                style={styles.hotDealCard}
+                                onPress={() => router.push({
+                                    pathname: "/projects/[id]",
+                                    params: {
+                                        id: deal.id,
+                                        title: deal.title,
+                                        price: deal.price || deal.goal,
+                                        description: deal.description,
+                                        images: deal.images || [deal.image],
+                                        category: deal.category
+                                    }
+                                } as any)}
+                            >
                                 <ImageBackground
                                     source={{ uri: deal.image }}
                                     style={styles.hotDealImage}
                                     imageStyle={{ borderRadius: 24 }}
                                 >
                                     <View style={styles.hotDealOverlay}>
-                                        <View style={[styles.hotTag, { backgroundColor: deal.tagColor }]}>
-                                            <Text style={styles.hotTagText}>{deal.tag}</Text>
-                                        </View>
+                                        {deal.category !== "Utilities and Products" && deal.tag !== "" && (
+                                            <View style={[styles.hotTag, { backgroundColor: deal.tagColor }]}>
+                                                <Text style={styles.hotTagText}>{deal.tag}</Text>
+                                            </View>
+                                        )}
                                         <View>
                                             <Text style={styles.hotDealTitle}>{deal.title}</Text>
-                                            <Text style={styles.hotDealLoc}>{deal.location}</Text>
+                                            <Text style={styles.hotDealLoc}>
+                                                {deal.location}
+                                                {deal.category === "Utilities and Products" && deal.partner ? ` • ${deal.partner}` : ""}
+                                            </Text>
                                             <View style={styles.hotDealFooter}>
-                                                <Text style={styles.hotDealPrice}>{deal.price}</Text>
-                                                <View style={styles.hotRoiBadge}>
-                                                    <Text style={styles.hotRoiText}>{deal.roi} ROI</Text>
-                                                </View>
+                                                <Text style={styles.hotDealPrice}>{formatCurrency(convertCurrency(deal.priceNum, "KES", preferredCurrency), preferredCurrency, currencySymbol)}</Text>
+                                                {deal.roi !== "" && deal.category !== "Utilities and Products" && deal.category !== "Business Opps" && (
+                                                    <View style={styles.hotRoiBadge}>
+                                                        <Text style={styles.hotRoiText}>{deal.roi}</Text>
+                                                    </View>
+                                                )}
                                             </View>
                                         </View>
                                     </View>
@@ -859,6 +598,11 @@ export default function ProjectsScreen() {
                             onPress={() => {
                                 setSelectedSector(cat.name);
                                 setSelectedSubCategory("All");
+                                if (cat.name === "Vehicle Sourcing") {
+                                    setSelectedRegion("All Regions");
+                                    setSelectedArea("All Areas");
+                                }
+                                setSearchQuery(""); // Clear search when switching sectors
                             }}
                         >
                             <View style={[
@@ -879,8 +623,30 @@ export default function ProjectsScreen() {
                     ))}
                 </ScrollView>
 
-                {/* Real Estate Sub-categories - Only visible when Real Estate is selected */}
-                {selectedSector === "Real Estate" && (
+                {/* Sector Search Bar */}
+                <View style={styles.searchContainer}>
+                    <Ionicons name="search-outline" size={20} color={COLORS.textLight} style={styles.searchIcon} />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder={getSearchPlaceholder()}
+                        placeholderTextColor={COLORS.textLight}
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        autoCorrect={false}
+                        autoCapitalize="none"
+                    />
+                    {searchQuery !== "" && (
+                        <TouchableOpacity
+                            onPress={() => setSearchQuery("")}
+                            style={styles.clearSearchBtn}
+                        >
+                            <Ionicons name="close-circle" size={18} color={COLORS.textLight} />
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* Real Estate Sub-categories - Only visible when Build or Buy a House is selected */}
+                {selectedSector === "Build or Buy a House" && (
                     <View style={{ marginTop: 16 }}>
                         <Text style={[styles.sectionTitle, { fontSize: 16, marginBottom: 12 }]}>Property Types</Text>
                         <ScrollView
@@ -944,8 +710,8 @@ export default function ProjectsScreen() {
                                     <Ionicons name="search" size={20} color={COLORS.white} />
                                 </View>
                                 <View>
-                                    <Text style={styles.requestBannerTitle}>Can't find your car?</Text>
-                                    <Text style={styles.requestBannerSubtitle}>Custom source from Japan/UK/Local</Text>
+                                    <Text style={styles.requestBannerTitle}>Can&apos;t find your car?</Text>
+                                    <Text style={styles.requestBannerSubtitle}>Custom source from Japan/UK/China/Local</Text>
                                 </View>
                             </View>
                             <View style={styles.requestBannerBtn}>
@@ -955,16 +721,16 @@ export default function ProjectsScreen() {
                     </View>
                 )}
 
-                {/* Infrastructure Sub-categories */}
-                {selectedSector === "Infrastructure" && (
+                {/* Utilities and Products Sub-categories */}
+                {selectedSector === "Utilities and Products" && (
                     <View style={{ marginTop: 16 }}>
-                        <Text style={[styles.sectionTitle, { fontSize: 16, marginBottom: 12 }]}>Infrastructure Type</Text>
+                        <Text style={[styles.sectionTitle, { fontSize: 16, marginBottom: 12 }]}>Utilities Type</Text>
                         <ScrollView
                             horizontal
                             showsHorizontalScrollIndicator={false}
                             contentContainerStyle={styles.categoryScroll}
                         >
-                            {infSubCategories.map((sub) => (
+                            {utilSubCategories.map((sub) => (
                                 <TouchableOpacity
                                     key={sub}
                                     style={[
@@ -1032,7 +798,7 @@ export default function ProjectsScreen() {
                 )}
 
                 {/* Region Chips */}
-                {selectedSector !== "Business Opps" && selectedSector !== "Kenyan Markets" && (
+                {selectedSector !== "Business Opps" && selectedSector !== "Kenyan Markets" && selectedSector !== "Vehicle Sourcing" && selectedSector !== "Utilities and Products" && (
                     <>
                         <View style={styles.sectionHeader}>
                             <Text style={styles.sectionTitle}>Explore Regions</Text>
@@ -1065,7 +831,7 @@ export default function ProjectsScreen() {
                 )}
 
                 {/* Nairobi Areas - Only visible when Nairobi is selected */}
-                {selectedSector !== "Business Opps" && selectedSector !== "Kenyan Markets" && selectedRegion === "Nairobi" && (
+                {selectedSector !== "Business Opps" && selectedSector !== "Kenyan Markets" && selectedSector !== "Vehicle Sourcing" && selectedSector !== "Utilities and Products" && selectedRegion === "Nairobi" && (
                     <View style={{ marginTop: 16 }}>
                         <Text style={[styles.sectionTitle, { fontSize: 16, marginBottom: 12 }]}>Nairobi Neighborhoods</Text>
                         <ScrollView
@@ -1111,7 +877,7 @@ export default function ProjectsScreen() {
                             </Text>
                         </View>
 
-                        <TouchableOpacity
+                        <View
                             style={{
                                 backgroundColor: COLORS.white,
                                 borderRadius: 16,
@@ -1122,7 +888,6 @@ export default function ProjectsScreen() {
                                 shadowOpacity: 0.1,
                                 shadowRadius: 10
                             }}
-                            onPress={() => router.push("/invest")}
                         >
                             <ImageBackground
                                 source={{ uri: "https://images.unsplash.com/photo-1611974765270-ca12586343bb?q=80&w=800&auto=format&fit=crop" }}
@@ -1137,32 +902,46 @@ export default function ProjectsScreen() {
                                             <Text style={{ color: COLORS.heritageAccent, fontWeight: '700', fontSize: 12, marginBottom: 4 }}>LIVE MARKET</Text>
                                             <Text style={{ color: COLORS.white, fontWeight: '800', fontSize: 22 }}>NSE Trading Floor</Text>
                                         </View>
-                                        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.success, justifyContent: 'center', alignItems: 'center' }}>
+                                        <TouchableOpacity
+                                            onPress={() => router.push("/invest")}
+                                            style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.success, justifyContent: 'center', alignItems: 'center' }}
+                                        >
                                             <Ionicons name="trending-up" size={24} color={COLORS.white} />
-                                        </View>
+                                        </TouchableOpacity>
                                     </View>
                                 </View>
                             </ImageBackground>
                             <View style={{ padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                                    <View style={{ alignItems: 'center' }}>
+                                    <TouchableOpacity
+                                        style={{ alignItems: 'center' }}
+                                        onPress={() => Alert.alert("Coming Soon", "Trading for Safaricom (SCOM) is currently in sandbox mode. Performance tracking is active, but live orders are coming soon!", [{ text: "OK" }])}
+                                    >
                                         <Text style={{ fontWeight: '700', color: COLORS.primary }}>SCOM</Text>
                                         <Text style={{ fontSize: 12, color: COLORS.success }}>+1.42%</Text>
-                                    </View>
+                                    </TouchableOpacity>
                                     <View style={{ width: 1, height: '100%', backgroundColor: '#EEE' }} />
-                                    <View style={{ alignItems: 'center' }}>
+                                    <TouchableOpacity
+                                        style={{ alignItems: 'center' }}
+                                        onPress={() => Alert.alert("Coming Soon", "Trading for Equity Group (EQTY) is currently in sandbox mode.", [{ text: "OK" }])}
+                                    >
                                         <Text style={{ fontWeight: '700', color: COLORS.primary }}>EQTY</Text>
                                         <Text style={{ fontSize: 12, color: COLORS.danger }}>-1.90%</Text>
-                                    </View>
+                                    </TouchableOpacity>
                                     <View style={{ width: 1, height: '100%', backgroundColor: '#EEE' }} />
-                                    <View style={{ alignItems: 'center' }}>
+                                    <TouchableOpacity
+                                        style={{ alignItems: 'center' }}
+                                        onPress={() => Alert.alert("Coming Soon", "Trading for KCB Group is currently in sandbox mode.", [{ text: "OK" }])}
+                                    >
                                         <Text style={{ fontWeight: '700', color: COLORS.primary }}>KCB</Text>
                                         <Text style={{ fontSize: 12, color: COLORS.success }}>+0.45%</Text>
-                                    </View>
+                                    </TouchableOpacity>
                                 </View>
-                                <Text style={{ color: COLORS.primary, fontWeight: '600' }}>Enter Market &gt;</Text>
+                                <TouchableOpacity onPress={() => router.push("/invest")}>
+                                    <Text style={{ color: COLORS.primary, fontWeight: '600' }}>Enter Market &gt;</Text>
+                                </TouchableOpacity>
                             </View>
-                        </TouchableOpacity>
+                        </View>
                     </View>
                 ) : filteredProjects.length > 0 ? (
                     filteredProjects.map((project) => (
@@ -1171,14 +950,23 @@ export default function ProjectsScreen() {
                             style={styles.projectCard}
                             onPress={() => router.push({
                                 pathname: "/projects/[id]",
-                                params: { id: project.id }
+                                params: {
+                                    id: project.id,
+                                    title: project.title,
+                                    price: project.price,
+                                    description: project.description,
+                                    images: project.images || [project.image],
+                                    category: project.category
+                                }
                             } as any)}
                         >
                             <View style={styles.projectImageContainer}>
                                 <Image source={{ uri: project.image }} style={styles.projectImage} />
-                                <View style={[styles.statusBadge, { backgroundColor: project.status === "Executing" ? COLORS.success : COLORS.warning }]}>
-                                    <Text style={styles.statusText}>{project.status}</Text>
-                                </View>
+                                {project.category !== "Vehicle Sourcing" && (
+                                    <View style={[styles.statusBadge, { backgroundColor: project.status === "Executing" ? COLORS.success : COLORS.warning }]}>
+                                        <Text style={styles.statusText}>{project.status}</Text>
+                                    </View>
+                                )}
                                 {project.verified && (
                                     <View style={styles.verifiedBadge}>
                                         <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
@@ -1190,8 +978,17 @@ export default function ProjectsScreen() {
                             <View style={styles.projectContent}>
                                 <View style={styles.projectHeader}>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={styles.projectLoc}>{project.location}, {project.region}</Text>
-                                        <Text style={styles.projectTitle} numberOfLines={1}>{project.title}</Text>
+                                        {project.category === "Managed Lands" ? (
+                                            <>
+                                                <Text style={styles.projectLoc}>{project.location}, {project.region}, {project.county || "Machakos"}, {project.area || "Area"}</Text>
+                                                <Text style={styles.projectTitle} numberOfLines={1}>{project.partner || project.developer || "Sema Real Estate Group"}</Text>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Text style={styles.projectLoc}>{project.location}, {project.region}</Text>
+                                                <Text style={styles.projectTitle} numberOfLines={1}>{project.title}</Text>
+                                            </>
+                                        )}
 
                                         {project.category === "Real Estate" && (
                                             <View style={styles.propertyFeatures}>
@@ -1212,27 +1009,57 @@ export default function ProjectsScreen() {
                                         )}
 
                                         {project.category === "Vehicle Sourcing" && (
-                                            <View style={styles.propertyFeatures}>
-                                                <View style={styles.featureItem}>
-                                                    <Ionicons name="speedometer-outline" size={14} color={COLORS.textLight} />
-                                                    <Text style={styles.featureItemText}>{project.mileage}</Text>
+                                            <View>
+                                                <View style={styles.propertyFeatures}>
+                                                    <View style={styles.featureItem}>
+                                                        <Ionicons name="speedometer-outline" size={14} color={COLORS.textLight} />
+                                                        <Text style={styles.featureItemText}>{project.mileage}</Text>
+                                                    </View>
+                                                    <View style={styles.featureItem}>
+                                                        <Ionicons name="cog-outline" size={14} color={COLORS.textLight} />
+                                                        <Text style={styles.featureItemText}>{project.transmission}</Text>
+                                                    </View>
+                                                    <View style={styles.featureItem}>
+                                                        <Ionicons name="flash-outline" size={14} color={COLORS.textLight} />
+                                                        <Text style={styles.featureItemText}>{("engine" in project ? project.engine : null) || project.type}</Text>
+                                                    </View>
+                                                    <View style={styles.featureItem}>
+                                                        <Ionicons name="shield-outline" size={14} color={COLORS.textLight} />
+                                                        <Text style={styles.featureItemText}>{project.condition}</Text>
+                                                    </View>
                                                 </View>
-                                                <View style={styles.featureItem}>
-                                                    <Ionicons name="cog-outline" size={14} color={COLORS.textLight} />
-                                                    <Text style={styles.featureItemText}>{project.transmission}</Text>
-                                                </View>
+
+                                                {project.partner && (
+                                                    <View style={[styles.featureItem, {
+                                                        marginTop: 12,
+                                                        paddingTop: 8,
+                                                        borderTopWidth: 1,
+                                                        borderTopColor: 'rgba(0,0,0,0.05)',
+                                                    }]}>
+                                                        <Ionicons name="business-outline" size={14} color={COLORS.secondary} />
+                                                        <Text style={[styles.featureItemText, { color: COLORS.secondary, fontWeight: '700' }]}>{project.partner}</Text>
+                                                    </View>
+                                                )}
                                             </View>
                                         )}
 
-                                        {project.category === "Infrastructure" && (
-                                            <View style={styles.propertyFeatures}>
-                                                <View style={styles.featureItem}>
-                                                    <Ionicons name="time-outline" size={14} color={COLORS.textLight} />
-                                                    <Text style={styles.featureItemText}>{project.completionTime}</Text>
-                                                </View>
-                                                <View style={styles.featureItem}>
-                                                    <Ionicons name="construct-outline" size={14} color={COLORS.textLight} />
-                                                    <Text style={styles.featureItemText}>{project.type}</Text>
+                                        {project.category === "Utilities and Products" && (
+                                            <View>
+                                                <Text
+                                                    style={{
+                                                        fontSize: 13,
+                                                        color: COLORS.text,
+                                                        marginTop: 8,
+                                                        lineHeight: 18,
+                                                        fontWeight: '500'
+                                                    }}
+                                                    numberOfLines={2}
+                                                >
+                                                    {project.description}
+                                                </Text>
+                                                <View style={[styles.featureItem, { marginTop: 8 }]}>
+                                                    <Ionicons name="business-outline" size={14} color={COLORS.secondary} />
+                                                    <Text style={[styles.featureItemText, { color: COLORS.secondary, fontWeight: '700' }]}>{project.partner}</Text>
                                                 </View>
                                             </View>
                                         )}
@@ -1241,22 +1068,16 @@ export default function ProjectsScreen() {
                                             <View style={styles.propertyFeatures}>
                                                 <View style={styles.featureItem}>
                                                     <Ionicons name="wallet-outline" size={14} color={COLORS.textLight} />
-                                                    <Text style={styles.featureItemText}>{project.capital}</Text>
-                                                </View>
-                                                <View style={styles.featureItem}>
-                                                    <Ionicons name="stats-chart-outline" size={14} color={COLORS.textLight} />
-                                                    <Text style={styles.featureItemText}>{project.risk} Risk</Text>
+                                                    <Text style={styles.featureItemText}>{formatCurrency(convertCurrency(project.priceNum, "KES", preferredCurrency), preferredCurrency, currencySymbol)}</Text>
                                                 </View>
                                             </View>
                                         )}
                                     </View>
-                                    <View style={styles.projectRoiContainer}>
-                                        <Text style={styles.projectRoiValue}>{project.roi}</Text>
-                                        <Text style={styles.projectRoiLabel}>
-                                            {project.category === "Real Estate" ? "EST. YIELD" :
-                                                project.category === "Business Opps" ? "EST. PROFIT" : "ROI"}
-                                        </Text>
-                                    </View>
+                                    {project.category !== "Managed Lands" && project.category !== "Build or Buy a House" && project.category !== "Vehicle Sourcing" && project.category !== "Utilities and Products" && project.category !== "Business Opps" && (
+                                        <View style={styles.projectRoiContainer}>
+                                            <Text style={styles.projectRoiValue}>{project.roi}</Text>
+                                        </View>
+                                    )}
                                 </View>
 
                                 {project.category === "Business Opps" ? (
@@ -1265,9 +1086,10 @@ export default function ProjectsScreen() {
                                             <Text style={[styles.fundingLabel, { fontWeight: '700' }]}>Monthly Revenue Potential</Text>
                                             <Ionicons name="trending-up" size={16} color={COLORS.success} />
                                         </View>
-                                        <Text style={[styles.fundingValue, { color: COLORS.secondary, fontSize: 18 }]}>{project.revenue}</Text>
+                                        <Text style={[styles.fundingValue, { color: COLORS.secondary, fontSize: 18 }]}>
+                                            {formatCurrency(convertCurrency(parseInt(project.revenue?.replace(/[^0-9]/g, '') || '0'), "KES", preferredCurrency), preferredCurrency, currencySymbol)}
+                                        </Text>
                                         <View style={[styles.fundingFooter, { marginTop: 4 }]}>
-                                            <Text style={styles.raisedText}>Demand: {project.demand || "High"}</Text>
                                             <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                                 <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.primary }}>START SAVING</Text>
                                                 <Ionicons name="arrow-forward" size={14} color={COLORS.primary} />
@@ -1278,19 +1100,19 @@ export default function ProjectsScreen() {
                                     <View style={styles.fundingInfo}>
                                         <View style={styles.fundingHeader}>
                                             <Text style={styles.fundingLabel}>Funding Progress</Text>
-                                            <Text style={styles.fundingValue}>{Math.round((project.progress ?? 0) * 100)}%</Text>
+                                            <Text style={styles.fundingValue}>{Math.round((project.raisedNum / (project.priceNum || 1)) * 100)}%</Text>
                                         </View>
                                         <View style={styles.progressBarBg}>
                                             <View
                                                 style={[
                                                     styles.progressBarFill,
-                                                    { width: `${(project.progress ?? 0) * 100}%`, backgroundColor: COLORS.secondary }
+                                                    { width: `${Math.min(Math.round((project.raisedNum / (project.priceNum || 1)) * 100), 100)}%`, backgroundColor: COLORS.secondary }
                                                 ]}
                                             />
                                         </View>
                                         <View style={styles.fundingFooter}>
-                                            <Text style={styles.raisedText}>{project.raised} raised</Text>
-                                            <Text style={styles.targetText}>Target: {project.target}</Text>
+                                            <Text style={styles.raisedText}>{formatCurrency(convertCurrency(project.raisedNum, "KES", preferredCurrency), preferredCurrency, currencySymbol)} raised</Text>
+                                            <Text style={styles.targetText}>Target: {formatCurrency(convertCurrency(project.priceNum, "KES", preferredCurrency), preferredCurrency, currencySymbol)}</Text>
                                         </View>
                                     </View>
                                 )}
@@ -1368,47 +1190,12 @@ export default function ProjectsScreen() {
                                 />
                             </View>
 
-                            {/* Land Specific Filters */}
-                            {selectedSector === "Managed Lands" && (
-                                <>
-                                    <Text style={styles.filterGroupTitle}>Title Status (Land)</Text>
-                                    <View style={styles.filterOptionsRow}>
-                                        <FilterOption label="All" active={filters.titleType === "All"} onPress={() => setFilters({ ...filters, titleType: "All" })} />
-                                        <FilterOption label="Freehold" active={filters.titleType === "Freehold"} onPress={() => setFilters({ ...filters, titleType: "Freehold" })} />
-                                        <FilterOption label="Leasehold" active={filters.titleType === "Leasehold"} onPress={() => setFilters({ ...filters, titleType: "Leasehold" })} />
-                                    </View>
 
-                                    <Text style={styles.filterGroupTitle}>Infrastructure & Utilities</Text>
-                                    <TouchableOpacity
-                                        style={styles.checkboxRow}
-                                        onPress={() => setFilters({ ...filters, nearTarmac: !filters.nearTarmac })}
-                                    >
-                                        <Ionicons name={filters.nearTarmac ? "checkbox" : "square-outline"} size={24} color={COLORS.secondary} />
-                                        <Text style={styles.checkboxLabel}>Near Tarmac Road</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={styles.checkboxRow}
-                                        onPress={() => setFilters({ ...filters, utilities: !filters.utilities })}
-                                    >
-                                        <Ionicons name={filters.utilities ? "checkbox" : "square-outline"} size={24} color={COLORS.secondary} />
-                                        <Text style={styles.checkboxLabel}>Water & Electricity Available</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={styles.checkboxRow}
-                                        onPress={() => setFilters({ ...filters, serviced: !filters.serviced })}
-                                    >
-                                        <Ionicons name={filters.serviced ? "checkbox" : "square-outline"} size={24} color={COLORS.secondary} />
-                                        <Text style={styles.checkboxLabel}>Serviced Plots (Gated)</Text>
-                                    </TouchableOpacity>
-                                </>
-                            )}
 
                             {/* Real Estate Specific Filters */}
-                            {selectedSector === "Real Estate" && (
+                            {selectedSector === "Build or Buy a House" && (
                                 <>
-                                    <Text style={styles.filterGroupTitle}>Rooms & Yield (Real Estate)</Text>
+                                    <Text style={styles.filterGroupTitle}>Bedroom Count</Text>
                                     <View style={styles.filterOptionsRow}>
                                         {["Any", "1", "2", "3", "4+"].map(num => (
                                             <FilterOption
@@ -1418,16 +1205,6 @@ export default function ProjectsScreen() {
                                                 onPress={() => setFilters({ ...filters, bedrooms: num })}
                                             />
                                         ))}
-                                    </View>
-
-                                    <View style={[styles.budgetInputs, { marginTop: 16 }]}>
-                                        <TextInput
-                                            style={styles.budgetInput}
-                                            placeholder="Min Yield %"
-                                            value={filters.rentalYield}
-                                            onChangeText={(text) => setFilters({ ...filters, rentalYield: text })}
-                                            keyboardType="numeric"
-                                        />
                                     </View>
                                 </>
                             )}
@@ -1549,6 +1326,19 @@ export default function ProjectsScreen() {
                                 value={requestData.budget}
                                 onChangeText={(val) => setRequestData({ ...requestData, budget: val })}
                             />
+
+                            <Text style={styles.filterGroupTitle}>Sourcing Location</Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 16 }}>
+                                {["Any", "Japan", "China", "UK", "Thailand", "Dubai", "Local"].map(loc => (
+                                    <TouchableOpacity
+                                        key={loc}
+                                        style={[styles.areaChip, requestData.sourcingLocation === loc && styles.selectedAreaChip]}
+                                        onPress={() => setRequestData({ ...requestData, sourcingLocation: loc })}
+                                    >
+                                        <Text style={[styles.areaText, requestData.sourcingLocation === loc && styles.selectedAreaText]}>{loc}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
 
                             <Text style={styles.filterGroupTitle}>Preferred Timeline</Text>
                             <View style={[styles.filterOptionsRow, { marginBottom: 20 }]}>
@@ -1781,6 +1571,36 @@ const styles = StyleSheet.create({
         color: COLORS.white,
         fontSize: 12,
         fontWeight: "700",
+    },
+    searchContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: COLORS.white,
+        borderRadius: 18,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        marginTop: 24,
+        marginHorizontal: 4,
+        borderWidth: 1,
+        borderColor: "rgba(10, 31, 68, 0.08)",
+        elevation: 2,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+    },
+    searchIcon: {
+        marginRight: 12,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 15,
+        fontWeight: "600",
+        color: COLORS.primary,
+        padding: 0,
+    },
+    clearSearchBtn: {
+        padding: 4,
     },
     categoryScroll: {
         gap: 12,

@@ -5,14 +5,13 @@ import {
     StyleSheet,
     TouchableOpacity,
     ScrollView,
-    Dimensions,
     TextInput
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-const { width } = Dimensions.get("window");
+// width constant was unused
 
 const COLORS = {
     primary: "#0A1F44", // Deep Blue

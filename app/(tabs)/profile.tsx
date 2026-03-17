@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { auth } from "../config/firebase";
 
 const { width } = Dimensions.get("window");
 
@@ -28,50 +30,70 @@ const COLORS = {
 };
 
 export default function ProfileScreen() {
+    const router = useRouter();
+    const firebaseUser = auth.currentUser;
+
     const user = {
-        name: "Brian Omondi",
-        email: "brian.omondi@zamani.io",
-        membership: "Zamani Elite",
-        since: "Member since 2024",
-        initials: "BO"
+        name: firebaseUser?.displayName || "Zamani Member",
+        email: firebaseUser?.email || "member@zamani.app",
+        membership: "Zamani Member",
+        since: "Member since 2026",
+        initials: firebaseUser?.displayName
+            ? firebaseUser.displayName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+            : "Z"
     };
 
     const stats = [
-        { label: "Net Worth", value: "KSh 2.45M", icon: "wallet-outline" },
-        { label: "Overall ROI", value: "+14.2%", icon: "trending-up-outline", isSuccess: true },
-        { label: "Ventures", value: "8 Active", icon: "rocket-outline" },
+        { label: "Net Worth", value: "KSh 0", icon: "wallet-outline" },
+        { label: "Saving Amount", value: "KSh 0", icon: "cash-outline" },
+        { label: "Ventures", value: "0 Active", icon: "rocket-outline" },
     ];
+
+    const handleSignOut = async () => {
+        try {
+            await auth.signOut();
+            router.replace("/(auth)/login");
+        } catch (error) {
+            console.error("Error signing out:", error);
+        }
+    };
 
     const menuItems = [
         {
             title: "Account Security",
             icon: "shield-checkmark-outline",
-            subtitle: "Password, Biometrics, 2FA"
+            subtitle: "Password, Biometrics, 2FA",
+            route: "/profile/security"
         },
         {
             title: "Payment Methods",
             icon: "card-outline",
-            subtitle: "M-Pesa, Bank Accounts"
+            subtitle: "M-Pesa, Bank Accounts",
+            route: "/profile/payments"
         },
         {
             title: "Notifications",
             icon: "notifications-outline",
-            subtitle: "Investment alerts, Updates"
+            subtitle: "Investment alerts, Updates",
+            route: "/profile/notifications"
         },
         {
             title: "Document Center",
             icon: "document-text-outline",
-            subtitle: "Statements, Certificates"
+            subtitle: "Statements, Certificates",
+            route: "/profile/documents"
         },
         {
             title: "Support & Help",
             icon: "chatbubble-ellipses-outline",
-            subtitle: "FAQs, Contact Support"
+            subtitle: "FAQs, Contact Support",
+            route: "/profile/support"
         },
         {
             title: "Legal & Privacy",
             icon: "information-circle-outline",
-            subtitle: "Terms of service, Privacy"
+            subtitle: "Terms of service, Privacy",
+            route: "/profile/legal"
         },
     ];
 
@@ -104,10 +126,7 @@ export default function ProfileScreen() {
                     <Text style={styles.userName}>{user.name}</Text>
                     <Text style={styles.userEmail}>{user.email}</Text>
 
-                    <View style={styles.membershipBadge}>
-                        <Ionicons name="star" size={14} color={COLORS.heritage} />
-                        <Text style={styles.membershipText}>{user.membership}</Text>
-                    </View>
+                    {/* Membership badge removed per request */}
                 </View>
 
                 {/* Portfolio Stats */}
@@ -128,6 +147,7 @@ export default function ProfileScreen() {
                     {menuItems.map((item, index) => (
                         <TouchableOpacity
                             key={index}
+                            onPress={() => item.route && router.push(item.route as any)}
                             style={[
                                 styles.menuItem,
                                 index === menuItems.length - 1 && { borderBottomWidth: 0 }
@@ -146,7 +166,7 @@ export default function ProfileScreen() {
                 </View>
 
                 {/* Logout Button */}
-                <TouchableOpacity style={styles.logoutBtn}>
+                <TouchableOpacity style={styles.logoutBtn} onPress={handleSignOut}>
                     <Ionicons name="log-out-outline" size={20} color={COLORS.danger} />
                     <Text style={styles.logoutText}>Sign Out</Text>
                 </TouchableOpacity>

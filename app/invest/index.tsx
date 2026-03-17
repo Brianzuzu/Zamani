@@ -6,15 +6,14 @@ import {
     TouchableOpacity,
     ScrollView,
     Dimensions,
-    Image
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { marketData } from "../data/market";
-import { userPortfolio } from "../data/portfolio";
+import { marketData } from "../_data/market";
+import { userPortfolio } from "../_data/portfolio";
 
-const { width } = Dimensions.get("window");
+// const { width } = Dimensions.get("window");
 
 const COLORS = {
     primary: "#0A1F44", // Deep Blue
@@ -67,7 +66,7 @@ export default function InvestDashboard() {
                                 +{userPortfolio.totalGain.toLocaleString()} ({((userPortfolio.totalGain / userPortfolio.totalInvested) * 100).toFixed(2)}%)
                             </Text>
                         </View>
-                        <Text style={styles.timeText}>Today's Return</Text>
+                        <Text style={styles.timeText}>Today&apos;s Return</Text>
                     </View>
                 </View>
 

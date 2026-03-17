@@ -7,13 +7,18 @@ import {
     ScrollView,
     TouchableOpacity,
     Dimensions,
-    Platform
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
+import { savingsService } from "../config/savingsService";
+import { authService } from "../config/authService";
+import axios from 'axios';
+import { API_URL } from "../config/authService";
+import { auth } from "../config/firebase";
+import { convertCurrency, formatCurrency } from "../../constants/currency";
 
-const { width } = Dimensions.get("window");
+// const { width } = Dimensions.get("window");
 
 const COLORS = {
     primary: "#0A1F44", // Deep Blue
@@ -29,54 +34,46 @@ const COLORS = {
 
 export default function SavingsScreen() {
     const router = useRouter();
+    const [goals, setGoals] = React.useState<any[]>([]);
+    const [userProfile, setUserProfile] = React.useState<any>(null);
+    const [isLoading, setIsLoading] = React.useState(true);
 
-    // Mock Data
-    const totalSavedKES = "KSh 412,500.00";
-    const totalSavedUSD = "$3,185.32";
-
-    const goals = [
-        {
-            id: "biz_poultry_1",
-            title: "Poultry Farming (Kiambu)",
-            current: "KSh 400,000",
-            target: "KSh 400,000",
-            progress: 1.0,
-            icon: "egg",
-            color: COLORS.secondary,
-            type: "Business",
-            status: "Funded"
-        },
-        {
-            id: "1",
-            title: "Legacy Education Fund",
-            current: "KSh 325,000",
-            target: "KSh 500,000",
-            progress: 0.65,
-            icon: "school",
-            color: COLORS.primary,
-            type: "Personal"
-        },
-        {
-            id: "2",
-            title: "Nairobi Land Project",
-            current: "KSh 87,500",
-            target: "KSh 1,200,000",
-            progress: 0.07,
-            icon: "business",
-            color: COLORS.secondary,
-            type: "Personal"
-        },
-        {
-            id: "3",
-            title: "Emergency Reserves",
-            current: "KSh 0",
-            target: "KSh 150,000",
-            progress: 0.0,
-            icon: "shield-checkmark",
-            color: COLORS.warning,
-            type: "Personal"
+    const fetchData = async () => {
+        setIsLoading(true);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            const [goalsData, profileRes] = await Promise.all([
+                savingsService.getMyGoals(),
+                axios.get(`${API_URL}/users/me`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+            ]);
+            setGoals(goalsData);
+            setUserProfile(profileRes.data);
+        } catch (error) {
+            console.error("Error fetching savings data:", error);
+        } finally {
+            setIsLoading(false);
         }
-    ];
+    };
+
+    useFocusEffect(
+        React.useCallback(() => {
+            fetchData();
+        }, [])
+    );
+
+    const currencySymbol = userProfile?.currencySymbol || "KSh";
+    const preferredCurrency = userProfile?.preferredCurrency || "KES";
+    const totalSavedNum = goals.reduce((acc, goal) => acc + (goal.currentAmount || 0), 0);
+    const totalSavedDisplay = formatCurrency(totalSavedNum, preferredCurrency, currencySymbol);
+    
+    // Display USD as secondary if not in USD/KES, or KES if in USD
+    const altCurrency = preferredCurrency === "KES" ? "USD" : "KES";
+    const altSymbol = preferredCurrency === "KES" ? "$" : "KSh";
+    const altAmount = convertCurrency(totalSavedNum, preferredCurrency, altCurrency);
+    const totalSavedAlt = formatCurrency(altAmount, altCurrency, altSymbol);
+
 
     return (
         <SafeAreaView style={styles.container}>
@@ -97,16 +94,16 @@ export default function SavingsScreen() {
             >
                 {/* Total Saved Overview */}
                 <View style={styles.wealthCard}>
-                    <Text style={styles.wealthLabel}>Total Saved</Text>
-                    <Text style={styles.wealthKES}>{totalSavedKES}</Text>
+                    <Text style={styles.wealthLabel}>Total Saved ({preferredCurrency})</Text>
+                    <Text style={styles.wealthKES}>{totalSavedDisplay}</Text>
                     <View style={styles.usdBadge}>
-                        <Text style={styles.wealthUSD}>≈ {totalSavedUSD}</Text>
+                        <Text style={styles.wealthUSD}>≈ {totalSavedAlt}</Text>
                     </View>
 
                     <View style={styles.wealthFooter}>
                         <View style={styles.wealthStat}>
                             <Text style={styles.statLabel}>Monthly Growth</Text>
-                            <Text style={styles.statValue}>+KSh 12,400</Text>
+                            <Text style={styles.statValue}>+KSh 0</Text>
                         </View>
                         <View style={styles.statDivider} />
                         <View style={styles.wealthStat}>
@@ -121,8 +118,33 @@ export default function SavingsScreen() {
                     <Text style={styles.sectionTitle}>Savings Goals</Text>
                 </View>
 
-                {goals.map((goal) => (
-                    <View key={goal.id} style={styles.goalCard}>
+                {goals.length === 0 && (
+                    <View style={styles.emptyState}>
+                        <View style={styles.emptyIconContainer}>
+                            <Ionicons name="sparkles-outline" size={40} color={COLORS.secondary} />
+                        </View>
+                        <Text style={styles.emptyTitle}>Start Building Wealth</Text>
+                        <Text style={styles.emptySubtitle}>You don&apos;t have any active savings goals yet.</Text>
+
+                        <TouchableOpacity
+                            style={styles.projectChooseBtn}
+                            onPress={() => router.push("/savings/create-goal")}
+                        >
+                            <Ionicons name="briefcase-outline" size={24} color={COLORS.white} />
+                            <Text style={styles.projectChooseBtnText}>Choose a saving goal from existing projects</Text>
+                        </TouchableOpacity>
+
+                        <View style={styles.dividerRow}>
+                            <View style={styles.dividerLine} />
+                            <Text style={styles.dividerText}>OR</Text>
+                            <View style={styles.dividerLine} />
+                        </View>
+                    </View>
+                )}
+
+                {goals.map((goal, index) => (
+                    <View key={goal._id || goal.id || index} style={styles.goalCard}>
+                        {/* existing goal card content content remains the same */}
                         <TouchableOpacity
                             onPress={() => router.push(`/savings/create-goal` as any)}
                         >
@@ -145,12 +167,21 @@ export default function SavingsScreen() {
                                                 <Text style={styles.bizTagText}>BUSINESS</Text>
                                             </View>
                                         )}
+                                        {goal.type === "Project" && (
+                                            <View style={styles.projTag}>
+                                                <Text style={styles.projTagText}>PROJECT</Text>
+                                            </View>
+                                        )}
                                     </View>
-                                    <Text style={styles.goalAmount}>{goal.current} / {goal.target}</Text>
+                                    <Text style={styles.goalAmount}>
+                                        {currencySymbol} {(goal.currentAmount || 0).toLocaleString()} / {currencySymbol} {(goal.targetAmount || 0).toLocaleString()}
+                                    </Text>
                                 </View>
                                 <View style={styles.percentContainer}>
-                                    <Text style={styles.goalPercent}>{Math.round(goal.progress * 100)}%</Text>
-                                    {goal.progress >= 1 && (
+                                    <Text style={styles.goalPercent}>
+                                        {Math.round(((goal.currentAmount || 0) / (goal.targetAmount || 1)) * 100)}%
+                                    </Text>
+                                    {(goal.currentAmount >= goal.targetAmount) && (
                                         <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
                                     )}
                                 </View>
@@ -160,14 +191,61 @@ export default function SavingsScreen() {
                                 <View
                                     style={[
                                         styles.progressBarFill,
-                                        { width: `${goal.progress * 100}%`, backgroundColor: goal.color }
+                                        { 
+                                            width: `${Math.min(100, Math.round(((goal.currentAmount || 0) / (goal.targetAmount || 1)) * 100))}%`, 
+                                            backgroundColor: goal.color || COLORS.primary 
+                                        }
                                     ]}
                                 />
+                            </View>
+
+                            <View style={styles.goalFooter}>
+                                <View style={styles.actionButtons}>
+                                    <TouchableOpacity
+                                        style={styles.topUpBtn}
+                                        onPress={() => router.push({
+                                            pathname: "/savings/deposit",
+                                            params: { 
+                                                id: goal._id || goal.id, 
+                                                title: goal.title, 
+                                                category: goal.type 
+                                            }
+                                        } as any)}
+                                    >
+                                        <Ionicons name="add" size={16} color={COLORS.white} />
+                                        <Text style={styles.topUpBtnText}>Top Up</Text>
+                                    </TouchableOpacity>
+
+                                    {goal.currentAmount > 0 && (
+                                        <TouchableOpacity
+                                            style={styles.withdrawBtn}
+                                            onPress={() => router.push({
+                                                pathname: "/savings/withdraw",
+                                                params: { 
+                                                    id: goal._id || goal.id, 
+                                                    title: goal.title, 
+                                                    balance: goal.currentAmount 
+                                                }
+                                            } as any)}
+                                        >
+                                            <Ionicons name="arrow-up" size={16} color={COLORS.primary} />
+                                            <Text style={styles.withdrawBtnText}>Withdraw</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                                
+                                <TouchableOpacity 
+                                    style={styles.detailsBtn}
+                                    onPress={() => router.push(`/savings/create-goal` as any)}
+                                >
+                                    <Text style={styles.detailsBtnText}>Details</Text>
+                                    <Ionicons name="chevron-forward" size={14} color={COLORS.textLight} />
+                                </TouchableOpacity>
                             </View>
                         </TouchableOpacity>
 
                         {/* Business Execution Actions */}
-                        {goal.type === "Business" && goal.progress >= 1 && (
+                        {goal.type === "Business" && (goal.currentAmount >= goal.targetAmount) && (
                             <View style={styles.executionActions}>
                                 <TouchableOpacity
                                     style={styles.executeBtn}
@@ -205,7 +283,7 @@ export default function SavingsScreen() {
                         <Text style={styles.insightTitle}>Savings Tip</Text>
                     </View>
                     <Text style={styles.insightText}>
-                        Increasing your monthly contribution by just KSh 2,000 can reach your "Land Project" goal 3 months faster.
+                        Increasing your monthly contribution by just {currencySymbol} {convertCurrency(2000, "KES", preferredCurrency).toLocaleString()} can reach your &quot;Land Project&quot; goal 3 months faster.
                     </Text>
                 </View>
             </ScrollView>
@@ -459,6 +537,18 @@ const styles = StyleSheet.create({
         color: COLORS.secondary,
         letterSpacing: 0.5,
     },
+    projTag: {
+        backgroundColor: "rgba(10, 31, 68, 0.1)",
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    projTagText: {
+        fontSize: 9,
+        fontWeight: "800",
+        color: COLORS.primary,
+        letterSpacing: 0.5,
+    },
     percentContainer: {
         alignItems: "flex-end",
         gap: 4,
@@ -519,5 +609,124 @@ const styles = StyleSheet.create({
         color: COLORS.primary,
         fontSize: 13,
         fontWeight: "700",
+    },
+    emptyState: {
+        alignItems: "center",
+        paddingVertical: 32,
+        backgroundColor: COLORS.white,
+        borderRadius: 30,
+        marginTop: 16,
+        paddingHorizontal: 24,
+    },
+    emptyIconContainer: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: "rgba(11, 61, 46, 0.05)",
+        justifyContent: "center",
+        alignItems: "center",
+        marginBottom: 16,
+    },
+    emptyTitle: {
+        fontSize: 20,
+        fontWeight: "700",
+        color: COLORS.primary,
+        marginBottom: 8,
+    },
+    emptySubtitle: {
+        fontSize: 14,
+        color: COLORS.textLight,
+        textAlign: "center",
+        marginBottom: 24,
+        lineHeight: 20,
+    },
+    projectChooseBtn: {
+        width: "100%",
+        height: 60,
+        backgroundColor: COLORS.secondary,
+        borderRadius: 18,
+        flexDirection: "row",
+        justifyContent: "center",
+        alignItems: "center",
+        gap: 12,
+        elevation: 4,
+        shadowColor: COLORS.secondary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+    },
+    projectChooseBtnText: {
+        color: COLORS.white,
+        fontSize: 14,
+        fontWeight: "700",
+        textAlign: "center",
+        flex: 1,
+    },
+    dividerRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        width: "100%",
+        marginVertical: 20,
+        gap: 12,
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: "rgba(0,0,0,0.05)",
+    },
+    dividerText: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: COLORS.heritageAccent,
+    },
+    topUpBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: COLORS.secondary,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 12,
+        gap: 6,
+    },
+    topUpBtnText: {
+        color: COLORS.white,
+        fontSize: 13,
+        fontWeight: "700",
+    },
+    actionButtons: {
+        flexDirection: "row",
+        gap: 8,
+    },
+    withdrawBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: COLORS.heritage,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 12,
+        gap: 6,
+        borderWidth: 1,
+        borderColor: "rgba(10, 31, 68, 0.1)",
+    },
+    withdrawBtnText: {
+        color: COLORS.primary,
+        fontSize: 13,
+        fontWeight: "700",
+    },
+    goalFooter: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginTop: 16,
+    },
+    detailsBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+    },
+    detailsBtnText: {
+        fontSize: 13,
+        color: COLORS.textLight,
+        fontWeight: "600",
     },
 });

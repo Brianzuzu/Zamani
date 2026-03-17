@@ -27,13 +27,17 @@ const COLORS = {
 
 export default function TransfersScreen() {
     const [amount, setAmount] = useState("");
-    const [searchQuery, setSearchQuery] = useState("");
+    const [selectedOption, setSelectedOption] = useState("1");
 
-    const recentTransfers = [
-        { id: "1", name: "Sarah Kamau", type: "M-Pesa", amount: "KSh 5,000", date: "Yesterday" },
-        { id: "2", name: "David Maina", type: "Zamani User", amount: "KSh 2,400", date: "2 days ago" },
-        { id: "3", name: "Heritage Home Trust", type: "Bank Transfer", amount: "KSh 50,000", date: "Feb 10" },
-    ];
+    // Recipient Details
+    const [phone, setPhone] = useState("");
+    const [bankName, setBankName] = useState("");
+    const [accountNumber, setAccountNumber] = useState("");
+    const [username, setUsername] = useState("");
+    const [country, setCountry] = useState("");
+    const [recipientName, setRecipientName] = useState("");
+
+    const recentTransfers: any[] = [];
 
     const transferOptions = [
         { id: "1", title: "Mobile Money", icon: "phone-portrait", color: "#66BB6A" },
@@ -63,31 +67,152 @@ export default function TransfersScreen() {
                 {/* Send Section */}
                 <View style={styles.transferGrid}>
                     {transferOptions.map((option) => (
-                        <TouchableOpacity key={option.id} style={styles.transferOption}>
-                            <View style={[styles.iconCircle, { backgroundColor: option.color + "15" }]}>
+                        <TouchableOpacity
+                            key={option.id}
+                            style={[
+                                styles.transferOption,
+                                selectedOption === option.id && styles.selectedTransferOption
+                            ]}
+                            onPress={() => setSelectedOption(option.id)}
+                        >
+                            <View style={[
+                                styles.iconCircle,
+                                { backgroundColor: option.color + (selectedOption === option.id ? "25" : "10") }
+                            ]}>
                                 <Ionicons name={option.icon as any} size={28} color={option.color} />
                             </View>
-                            <Text style={styles.optionTitle}>{option.title}</Text>
+                            <Text style={[
+                                styles.optionTitle,
+                                selectedOption === option.id && styles.selectedOptionTitle
+                            ]}>{option.title}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
 
-                {/* Quick Send Input (Mock) */}
+                {/* Specific Send Section */}
                 <View style={styles.quickSendCard}>
-                    <Text style={styles.sectionTitle}>Quick Send</Text>
+                    <Text style={styles.quickSendCardTitle}>
+                        {transferOptions.find(o => o.id === selectedOption)?.title} Transfer
+                    </Text>
+
+                    {/* Common Amount Input */}
                     <View style={styles.inputContainer}>
                         <Text style={styles.currency}>KSh</Text>
                         <TextInput
                             style={styles.amountInput}
                             placeholder="0.00"
+                            placeholderTextColor="rgba(255,255,255,0.4)"
                             value={amount}
                             onChangeText={setAmount}
                             keyboardType="numeric"
                         />
                     </View>
+
+                    {/* Dynamic Recipient Fields */}
+                    {selectedOption === "1" && ( /* Mobile Money */
+                        <View style={styles.recipientContainer}>
+                            <Text style={styles.inputLabel}>Mobile Number</Text>
+                            <View style={styles.detailInputRow}>
+                                <Ionicons name="call-outline" size={20} color="rgba(255,255,255,0.7)" />
+                                <TextInput
+                                    style={styles.detailInput}
+                                    placeholder="+254 7XX XXX XXX"
+                                    placeholderTextColor="rgba(255,255,255,0.4)"
+                                    value={phone}
+                                    onChangeText={setPhone}
+                                    keyboardType="phone-pad"
+                                />
+                            </View>
+                        </View>
+                    )}
+
+                    {selectedOption === "2" && ( /* Bank Transfer */
+                        <View style={styles.recipientContainer}>
+                            <Text style={styles.inputLabel}>Bank Name</Text>
+                            <View style={[styles.detailInputRow, { marginBottom: 16 }]}>
+                                <Ionicons name="business-outline" size={20} color="rgba(255,255,255,0.7)" />
+                                <TextInput
+                                    style={styles.detailInput}
+                                    placeholder="Select Bank"
+                                    placeholderTextColor="rgba(255,255,255,0.4)"
+                                    value={bankName}
+                                    onChangeText={setBankName}
+                                />
+                            </View>
+                            <Text style={styles.inputLabel}>Account Number</Text>
+                            <View style={styles.detailInputRow}>
+                                <Ionicons name="card-outline" size={20} color="rgba(255,255,255,0.7)" />
+                                <TextInput
+                                    style={styles.detailInput}
+                                    placeholder="Enter Account Number"
+                                    placeholderTextColor="rgba(255,255,255,0.4)"
+                                    value={accountNumber}
+                                    onChangeText={setAccountNumber}
+                                    keyboardType="numeric"
+                                />
+                            </View>
+                        </View>
+                    )}
+
+                    {selectedOption === "3" && ( /* Zamani User */
+                        <View style={styles.recipientContainer}>
+                            <Text style={styles.inputLabel}>Zamani Username or ID</Text>
+                            <View style={styles.detailInputRow}>
+                                <Ionicons name="at-outline" size={20} color="rgba(255,255,255,0.7)" />
+                                <TextInput
+                                    style={styles.detailInput}
+                                    placeholder="username or phone"
+                                    placeholderTextColor="rgba(255,255,255,0.4)"
+                                    value={username}
+                                    onChangeText={setUsername}
+                                    autoCapitalize="none"
+                                />
+                            </View>
+                        </View>
+                    )}
+
+                    {selectedOption === "4" && ( /* International */
+                        <View style={styles.recipientContainer}>
+                            <Text style={styles.inputLabel}>Destination Country</Text>
+                            <View style={[styles.detailInputRow, { marginBottom: 16 }]}>
+                                <Ionicons name="globe-outline" size={20} color="rgba(255,255,255,0.7)" />
+                                <TextInput
+                                    style={styles.detailInput}
+                                    placeholder="Country Name"
+                                    placeholderTextColor="rgba(255,255,255,0.4)"
+                                    value={country}
+                                    onChangeText={setCountry}
+                                />
+                            </View>
+                            <Text style={styles.inputLabel}>Recipient Full Name</Text>
+                            <View style={[styles.detailInputRow, { marginBottom: 16 }]}>
+                                <Ionicons name="person-outline" size={20} color="rgba(255,255,255,0.7)" />
+                                <TextInput
+                                    style={styles.detailInput}
+                                    placeholder="As per bank details"
+                                    placeholderTextColor="rgba(255,255,255,0.4)"
+                                    value={recipientName}
+                                    onChangeText={setRecipientName}
+                                />
+                            </View>
+                            <Text style={styles.inputLabel}>IBAN / SWIFT Code</Text>
+                            <View style={styles.detailInputRow}>
+                                <Ionicons name="swap-horizontal-outline" size={20} color="rgba(255,255,255,0.7)" />
+                                <TextInput
+                                    style={styles.detailInput}
+                                    placeholder="Enter International Code"
+                                    placeholderTextColor="rgba(255,255,255,0.4)"
+                                    value={accountNumber}
+                                    onChangeText={setAccountNumber}
+                                    autoCapitalize="characters"
+                                />
+                            </View>
+                        </View>
+                    )}
+
                     <TouchableOpacity style={styles.sendBtn}>
-                        <Text style={styles.sendBtnText}>Enter Recipient Details</Text>
-                        <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
+                        <Text style={styles.sendBtnText}>Send Money Now</Text>
+                        <Ionicons name="paper-plane" size={18} color={COLORS.secondary} />
                     </TouchableOpacity>
                 </View>
 
@@ -205,6 +330,16 @@ const styles = StyleSheet.create({
         elevation: 4,
         shadowColor: COLORS.secondary,
         shadowOpacity: 0.2,
+        shadowRadius: 15,
+    },
+    selectedTransferOption: {
+        borderColor: COLORS.secondary,
+        borderWidth: 1.5,
+        elevation: 6,
+    },
+    selectedOptionTitle: {
+        color: COLORS.secondary,
+        fontWeight: "800",
     },
     sectionTitle: {
         fontSize: 20,
@@ -226,6 +361,35 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         height: 64,
         marginBottom: 20,
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.2)",
+    },
+    recipientContainer: {
+        marginBottom: 24,
+    },
+    inputLabel: {
+        color: "rgba(255,255,255,0.6)",
+        fontSize: 12,
+        fontWeight: "700",
+        marginBottom: 8,
+        marginLeft: 4,
+        textTransform: "uppercase",
+        letterSpacing: 1,
+    },
+    detailInputRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "rgba(255,255,255,0.08)",
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        height: 54,
+    },
+    detailInput: {
+        flex: 1,
+        marginLeft: 12,
+        color: COLORS.white,
+        fontSize: 15,
+        fontWeight: "600",
     },
     currency: {
         fontSize: 20,

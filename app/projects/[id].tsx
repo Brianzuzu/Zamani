@@ -12,6 +12,9 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { API_URL } from "../config/authService";
+import { auth } from "../config/firebase";
+import { formatCurrency, convertCurrency, parsePrice } from "../../constants/currency";
 
 const { width } = Dimensions.get("window");
 
@@ -27,40 +30,185 @@ const COLORS = {
 };
 
 export default function ProjectDetails() {
-    const { id } = useLocalSearchParams();
+    const { id, title: paramTitle, price: paramPrice, description: paramDesc, images: paramImages, category: paramCategory, active } = useLocalSearchParams();
     const router = useRouter();
     const [selectedInvestmentType, setSelectedInvestmentType] = React.useState("Fractional");
-
-    // Mock Data Fetch based on ID
-    const isVehicle = (id as string)?.startsWith("veh");
-    const isInfrastructure = (id as string)?.startsWith("res") || (id as string)?.startsWith("com") || (id as string)?.startsWith("utl") || id === "144" || id === "156";
-    const isBusiness = (id as string)?.startsWith("biz");
-    const isImport = (id as string)?.includes("imp");
-
+    const [activeImageIndex, setActiveImageIndex] = React.useState(0);
     const [selectedMaterials, setSelectedMaterials] = React.useState<string[]>([]);
+    const [dbProject, setDbProject] = React.useState<any>(null);
+    const [loading, setLoading] = React.useState(false);
+    const [userProfile, setUserProfile] = React.useState<any>(null);
 
-    const project = {
+    // Data Identification based on ID or Category
+    const currentCategory = dbProject?.category || paramCategory;
+    const isVehicle = (id as string)?.startsWith("veh") || (id as string)?.startsWith("hot_veh") || currentCategory === "Vehicle Sourcing";
+    const isUtilities = (id as string)?.startsWith("res") || (id as string)?.startsWith("com") || (id as string)?.startsWith("utl") || (id as string)?.startsWith("util") || (id as string)?.startsWith("hot_util") || id === "144" || id === "156" || currentCategory === "Utilities and Products";
+    const isBusiness = (id as string)?.startsWith("biz") || (id as string)?.startsWith("hot_biz") || currentCategory === "Business" || currentCategory === "Business Opps";
+    const isImport = (id as string)?.includes("imp") || dbProject?.metadata?.source === "Import";
+    const isBuildOrBuy = (id as string)?.startsWith("prop") || (id as string)?.startsWith("hot_re") || (id as string)?.startsWith("mansion") || currentCategory === "Build or Buy a House" || currentCategory === "Real Estate";
+    const isManagedLands = currentCategory === "Managed Lands" || (!isVehicle && !isUtilities && !isBusiness && !isBuildOrBuy);
+
+    React.useEffect(() => {
+        fetchData();
+    }, [id]);
+
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            const [projectRes, profileRes] = await Promise.all([
+                (id && !id.toString().includes('_') && id.toString().length > 10) 
+                    ? axios.get(`${API_URL}/projects/${id}`)
+                    : Promise.resolve({ data: null }),
+                token ? axios.get(`${API_URL}/users/me`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                }) : Promise.resolve({ data: null })
+            ]);
+
+            if (projectRes.data) setDbProject(projectRes.data);
+            if (profileRes.data) setUserProfile(profileRes.data);
+        } catch (err) {
+            console.error("Error fetching data:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const currencySymbol = userProfile?.currencySymbol || "KSh";
+    const preferredCurrency = userProfile?.preferredCurrency || "KES";
+
+    // Pre-calculate derived fields to avoid bracket depth issues
+    const displayTitle = dbProject?.title || paramTitle || (
+        isVehicle ? (isImport ? "2019 Toyota Harrier" : "2018 Toyota Prado TX-L") :
+            isUtilities ? (
+                id === "util_sol_1" || id === "hot_util_1" ? "Eco-Smart Solar Heater 300L" :
+                    id === "util_furn_1" || id === "hot_util_2" ? "Executive Mahogany Bed" :
+                        id === "util_ag_1" || id === "hot_util_3" ? "Solar Water Pump 5HP" :
+                            id === "util_app_1" || id === "hot_util_4" ? "Samsung Smart Fridge" :
+                                id === "util_build_1" ? "Interlocking Brick Machine" :
+                                    id === "util_ag_2" ? "Drip Irrigation Kit (1 Acre)" : "Modern Eco-Utility"
+            ) :
+                isBusiness ? (
+                    id === "biz_001" ? "Poultry Farming (Layers)" :
+                        id === "biz_ag_002" ? "Greenhouse Tomato Farming" : "Tilapia Fish Farming"
+                ) :
+                    (
+                        id === "mansion_001" ? "5 Bedroom Mansion - Syokimau" :
+                            id === "prop001" ? "Modern 2 Bedroom - Westlands" :
+                                id === "prop002" ? "Off-Plan 3 Bedroom Villa" :
+                                    id === "1" ? "Rift Valley Macro-Farm" : "Nairobi Smart Lofts"
+                    )
+    );
+
+    const displayCategory = dbProject?.category || paramCategory || (
+        isVehicle ? "Vehicle Sourcing" :
+            isUtilities ? "Utilities and Products" :
+                isBusiness ? "Business" :
+                    ((id as string)?.startsWith("prop") ? "Build or Buy a House" : "Managed Lands")
+    );
+
+    const displayRoi = dbProject?.roi || (
+        isVehicle ? (isImport ? "Est. Total: $18,300" : "Verified Dealer") :
+            isUtilities ? "12% - 15% ROI" :
+                isBusiness ? "35% Profit" :
+                    (id === "prop001" ? "7.5% Yield" : id === "prop002" ? "15% ROI" : "18%")
+    );
+
+    const displayPrice = dbProject?.price || (
+        isVehicle ? (isImport ? "$12,000" : "KSh 5.8M") :
+            isUtilities ? "KSh 4.8M" :
+                isBusiness ? "KSh 0" :
+                    (id === "mansion_001" ? "KSh 11.16M" : (id === "prop001" ? "KSh 60M" : id === "prop002" ? "KSh 20M" : "KSh 15.4M"))
+    );
+
+    const displayTarget = dbProject?.targetAmount ? `KSh ${dbProject.targetAmount.toLocaleString()}` : (
+        isVehicle ? (isImport ? "$18,300" : "Ready Stock") :
+            isUtilities ? "KSh 12M" :
+                isBusiness ? "KSh 400,000" :
+                    (id === "mansion_001" ? "KSh 18M" : (id === "prop001" ? "KSh 100M" : id === "prop002" ? "KSh 80M" : "KSh 20M"))
+    );
+
+    const displayProgress = isVehicle ? (isImport ? 0.0 : 1.0) : (isUtilities ? 0.40 : (isBusiness ? 0.0 : (id === "mansion_001" ? 0.62 : (id === "prop001" ? 0.60 : id === "prop002" ? 0.25 : 0.77))));
+    const displayInvestors = isVehicle ? (isImport ? 12 : 1) : (isUtilities ? 28 : (isBusiness ? 1 : (id === "prop001" ? 180 : 45)));
+    const displayLocation = dbProject?.location || (
+        isVehicle ? (isImport ? "Japan -> Mombasa" : "Westlands, Nairobi") :
+            isUtilities ? "Syokimau / Athi River" :
+                isBusiness ? "Kiambu, Central" :
+                    (id === "prop001" ? "Westlands, Nairobi" : "Syokimau, Nairobi")
+    );
+
+    const displayDescription = dbProject?.description || paramDesc || (
+        isVehicle ? "A meticulously maintained vehicle offering comfort, reliability, and modern features. Fully inspected and verified for quality assurance." :
+            isUtilities ? (
+                id === "hot_util_1" ? "High-efficiency solar water heating system with a 300L capacity. Perfect for large families, reduces electricity bills by up to 70%." :
+                    id === "hot_util_2" ? "Handcrafted executive bed made from premium aged mahogany. Features a modern minimalist design with reinforced slats for maximum comfort." :
+                        id === "hot_util_3" ? "Powerful 5HP solar-powered water pump capable of lifting water from depths of up to 100m. Ideal for medium-scale agricultural irrigation." :
+                            id === "hot_util_4" ? "Energy-efficient Samsung Smart Fridge with twin cooling plus technology. Keeps food fresh for longer with a sleek silver finish." :
+                                "A high-quality utility or product sourced and verified by Zamani. Designed for reliability, efficiency, and long-term value."
+            ) :
+                isBusiness ? "A unique business opportunity with strong market demand and reliable revenue projections. Zamani has verified the fundamentals to ensure viability and growth potential." :
+                    ((id as string)?.startsWith("prop") || isBuildOrBuy ? "A premium residential development offering unmatched luxury and strategic location. Perfect for both high-yield rental income and long-term capital appreciation." :
+                        "Prime agricultural land in a high-yield area with excellent soil quality. The land is accessible, well-documented, and ideal for long-term investment or farming.")
+    );
+
+    const displayProductPriceNum = parsePrice(dbProject?.price || paramPrice || (
+        id === "hot_util_1" ? "45000" :
+            id === "hot_util_2" ? "85000" :
+                id === "hot_util_3" ? "120000" :
+                    id === "hot_util_4" ? "155000" :
+                        (id === "util_sol_1" ? "42000" : "25000")
+    ));
+    const displayProductPrice = formatCurrency(convertCurrency(displayProductPriceNum, "KES", preferredCurrency), preferredCurrency, currencySymbol);
+
+    const displayImages = dbProject?.images?.length > 0 ? dbProject.images : (
+        paramImages ? (
+            Array.isArray(paramImages) ? paramImages :
+                (typeof paramImages === 'string' && paramImages.includes(',') ? paramImages.split(',') : [paramImages])
+        ) :
+            (
+                isVehicle ? [
+                    "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?q=80&w=800&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?q=80&w=800&auto=format&fit=crop"
+                ] :
+                    isUtilities ? [
+                        "https://images.unsplash.com/photo-1503387762-592dea58ef41?q=80&w=800&auto=format&fit=crop",
+                        "https://images.unsplash.com/photo-1581094794329-c8112a89af12?q=80&w=800&auto=format&fit=crop",
+                        "https://images.unsplash.com/photo-1590641243171-893ec7a68e64?q=80&w=800&auto=format&fit=crop"
+                    ] :
+                        isManagedLands ? [
+                            "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=800&auto=format&fit=crop",
+                            "https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=800&auto=format&fit=crop",
+                            "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=80&w=800&auto=format&fit=crop"
+                        ] :
+                            [
+                                "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?q=80&w=800&auto=format&fit=crop",
+                                "https://images.unsplash.com/photo-1460317442991-0ec23939714b?q=80&w=800&auto=format&fit=crop",
+                                "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=800&auto=format&fit=crop"
+                            ]
+            )
+    );
+
+    const project: any = {
         id: id,
-        title: isVehicle
-            ? (isImport ? "2019 Toyota Harrier" : "2018 Toyota Prado TX-L")
-            : (isInfrastructure
-                ? (id === "res001" || id === "hot_inf_1" ? "Modern 3-Bedroom Villa" : "Athi River Warehouse")
-                : (isBusiness
-                    ? (id === "biz_001" ? "Poultry Farming (Layers)" : id === "biz_ag_002" ? "Greenhouse Tomato Farming" : "Tilapia Fish Farming")
-                    : (id === "prop001" ? "Modern 2 Bedroom - Westlands" : id === "prop002" ? "Off-Plan 3 Bedroom Villa" : id === "1" ? "Rift Valley Macro-Farm" : "Nairobi Smart Lofts"))),
-        category: isVehicle ? "Vehicle Sourcing" : (isInfrastructure ? "Infrastructure" : (isBusiness ? "Business" : ((id as string)?.startsWith("prop") ? "Real Estate" : "Managed Lands"))),
-        roi: isVehicle
-            ? (isImport ? "Est. Total: $18,300" : "Verified Dealer")
-            : (isInfrastructure ? "12% - 15% ROI" : (isBusiness ? "35% Profit" : (id === "prop001" ? "7.5% Yield" : id === "prop002" ? "15% ROI" : "18%"))),
-        tenure: isVehicle ? "Immediate" : (isInfrastructure ? "12-24 Months" : (isBusiness ? "Recurring Income" : "Flexible")),
-        fundinged: isVehicle ? (isImport ? "$12,000" : "KSh 5.8M") : (isInfrastructure ? "KSh 4.8M" : (isBusiness ? "KSh 0" : (id === "prop001" ? "KSh 60M" : id === "prop002" ? "KSh 20M" : "KSh 15.4M"))),
-        target: isVehicle ? (isImport ? "$18,300" : "Ready Stock") : (isInfrastructure ? "KSh 12M" : (isBusiness ? "KSh 400,000" : (id === "prop001" ? "KSh 100M" : id === "prop002" ? "KSh 80M" : "KSh 20M"))),
-        progress: isVehicle ? (isImport ? 0.0 : 1.0) : (isInfrastructure ? 0.40 : (isBusiness ? 0.0 : (id === "prop001" ? 0.60 : id === "prop002" ? 0.25 : 0.77))),
-        investors: isVehicle ? (isImport ? 12 : 1) : (isInfrastructure ? 28 : (isBusiness ? 1 : (id === "prop001" ? 180 : 45))),
-        location: isVehicle ? (isImport ? "Japan -> Mombasa" : "Westlands, Nairobi") : (isInfrastructure ? "Syokimau / Athi River" : (isBusiness ? "Kiambu, Central" : (id === "prop001" ? "Westlands, Nairobi" : "Syokimau, Nairobi"))),
+        title: displayTitle,
+        category: displayCategory,
+        roi: displayRoi,
+        tenure: isVehicle ? "Immediate" : (isUtilities ? "12-24 Months" : (isBusiness ? "Recurring Income" : "Flexible")),
+        fundinged: displayPrice,
+        target: displayTarget,
+        progress: displayProgress,
+        investors: displayInvestors,
+        location: displayLocation,
 
         // Infrastructure Specifics
-        milestones: [
+        milestones: id === "mansion_001" ? [
+            { id: 1, title: "Site Clearing & Excavation", status: "Completed", date: "Oct 2025", media: "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?q=80&w=400" },
+            { id: 2, title: "Foundation & Sub-structure", status: "Completed", date: "Dec 2025", media: "https://images.unsplash.com/photo-1590641243171-893ec7a68e64?q=80&w=400" },
+            { id: 3, title: "Walling & Lintels", status: "Completed", date: "Feb 2026", media: "https://images.unsplash.com/photo-1503387762-592dea58ef41?q=80&w=400" },
+            { id: 4, title: "Roofing & Plumbing", status: "In Progress", date: "April 2026", media: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=400" },
+            { id: 5, title: "Plastering & Interiors", status: "Pending", date: "June 2026", media: null },
+            { id: 6, title: "Final Handover", status: "Pending", date: "Aug 2026", media: null },
+        ] : [
             { id: 1, title: "Foundation & Slab", status: "Completed", date: "Jan 2026", media: "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?q=80&w=400" },
             { id: 2, title: "Wall & Roofing", status: "In Progress", date: "March 2026", media: null },
             { id: 3, title: "Finishing & Interiors", status: "Pending", date: "June 2026", media: null },
@@ -74,33 +222,57 @@ export default function ProjectDetails() {
         ],
 
         // Property Specifics
-        bedrooms: id === "prop001" ? 2 : 3,
-        bathrooms: id === "prop001" ? 2 : 3,
-        size: id === "prop001" ? "120 sqm" : "180 sqm",
+        bedrooms: dbProject?.metadata?.bedrooms || (id === "mansion_001" ? 5 : (id === "prop001" ? 2 : 3)),
+        bathrooms: dbProject?.metadata?.bathrooms || (id === "mansion_001" ? 6 : (id === "prop001" ? 2 : 3)),
+        size: dbProject?.metadata?.plotSize || dbProject?.metadata?.size || (id === "mansion_001" ? "550 sqm" : (id === "prop001" ? "120 sqm" : "180 sqm")),
 
         // Vehicle Specifics
-        year: isImport ? 2019 : 2018,
-        mileage: isImport ? "45,000 km" : "72,000 km",
-        transmission: "Automatic",
-        fuel: "Petrol",
-        engine: "2500cc",
-        importSummary: isImport ? {
-            fob: "$12,000",
-            shipping: "$1,500",
-            duty: "$4,200",
-            clearing: "$600"
+        year: dbProject?.metadata?.year || (isImport ? 2019 : 2018),
+        mileage: dbProject?.metadata?.mileage || (isImport ? "45,000 km" : "72,000 km"),
+        transmission: dbProject?.metadata?.transmission || "Automatic",
+        fuel: dbProject?.metadata?.fuel || "Petrol",
+        engine: dbProject?.metadata?.engine || "2500cc",
+        importSummary: (isImport || dbProject?.metadata?.source === "Import") ? {
+            fob: dbProject?.metadata?.fob || "$12,000",
+            shipping: dbProject?.metadata?.ship || "$1,500",
+            duty: dbProject?.metadata?.duty || "$4,200",
+            clearing: dbProject?.metadata?.clear || "$600"
         } : null,
 
-        developer: isVehicle ? "Toyota Kenya Partner" : (isInfrastructure ? "GreenBuild Ltd" : "Sema Real Estate Group"),
-        offPlan: !isVehicle && (id === "prop002" || isInfrastructure),
-        completion: isVehicle ? "Available Now" : (isInfrastructure ? "Aug 2026" : "Dec 2026"),
-        description: isVehicle
-            ? "A meticulously maintained vehicle offering comfort, reliability, and modern features. Fully inspected and verified for quality assurance."
-            : (isInfrastructure
-                ? "A context-aware infrastructure project designed for maximum efficiency and sustainability. Track live updates and construction milestones as we build."
-                : ((id as string)?.startsWith("prop")
-                    ? "A premium residential development offering unmatched luxury and strategic location. Perfect for both high-yield rental income and long-term capital appreciation."
-                    : "Expanding our large-scale production in high-yield areas. Using advanced techniques, we target premium markets while empowering local communities.")),
+        // Resolve Developer/Seller Name
+        developer: (
+            dbProject?.metadata?.partner ||
+            dbProject?.partner?.name ||
+            (isVehicle ? "Premium Verified Seller" :
+                (isUtilities ? "Verified Zamani Supplier" :
+                    (isManagedLands ? (id === "69a34cda0d4d59fff6ea5403" ? "Karen Hills Residences" : "Sema Real Estate Group") : "Premium Developer")))
+        ),
+
+        // Contact details
+        contactPhone: dbProject?.metadata?.phone || (isManagedLands ? "+254 712 345 678" : "+254 700 000 000"),
+        contactEmail: dbProject?.metadata?.email || (isManagedLands ? "info@semarealestate.co.ke" : "support@zamani.app"),
+
+        offPlan: !isVehicle && (id === "prop002" || isUtilities || dbProject?.metadata?.offPlan),
+        completion: dbProject?.metadata?.completionDate || (isVehicle ? "Available Now" : (isUtilities ? "Aug 2026" : "Dec 2026")),
+        description: displayDescription,
+
+        // Product & Utility & Land Info
+        landInfo: isManagedLands ? {
+            price: dbProject?.price || paramPrice || "KSh 1.2M",
+            size: dbProject?.metadata?.plotSize || "50x100 (1/8 Acre)",
+            location: dbProject?.location || "Syokimau, Nairobi",
+            county: dbProject?.metadata?.county || "Machakos",
+            titleDeed: dbProject?.metadata?.titleType || "Ready Freehold Title",
+            nearestTown: dbProject?.metadata?.nearestTown || "Athi River (10 Mins)",
+            utilities: dbProject?.metadata?.utilities || "Water, Electricity, Near Schools, Hospitals & Tarmac Road"
+        } : undefined,
+        productInfo: {
+            price: displayProductPrice,
+            condition: dbProject?.metadata?.condition || "Brand New",
+            warranty: "12 Months",
+            delivery: "2-3 Working Days",
+            seller: dbProject?.metadata?.partner || dbProject?.partner?.name || (isVehicle ? "Premium Verified Seller" : (isUtilities ? "Verified Zamani Supplier" : "Sema Real Estate Group"))
+        },
         impact: isVehicle
             ? ["Verified Dealer Guarantee", "Partnering with NCBA/Equity", "7-Day Return Policy"]
             : [
@@ -111,21 +283,7 @@ export default function ProjectDetails() {
         documents: isVehicle
             ? ["Logbook / Export Cert", "Inspection Certificate", "Sales Agreement"]
             : ["Title Deed", "Floor Plan", "Project Brochure"],
-        images: isVehicle
-            ? [
-                "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?q=80&w=800&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?q=80&w=800&auto=format&fit=crop"
-            ]
-            : (isInfrastructure
-                ? [
-                    "https://images.unsplash.com/photo-1503387762-592dea58ef41?q=80&w=800&auto=format&fit=crop",
-                    "https://images.unsplash.com/photo-1581094794329-c8112a89af12?q=80&w=800&auto=format&fit=crop"
-                ]
-                : [
-                    "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?q=80&w=800&auto=format&fit=crop",
-                    "https://images.unsplash.com/photo-1460317442991-0ec23939714b?q=80&w=800&auto=format&fit=crop",
-                    "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=800&auto=format&fit=crop"
-                ]),
+        images: displayImages,
 
         // Business Opportunity Specifics
         capitalBreakdown: [
@@ -136,13 +294,13 @@ export default function ProjectDetails() {
             { label: "Working Capital (3 mo)", value: "80,000" },
         ],
         revenueProjection: {
-            monthly: "90,000",
+            monthly: dbProject?.metadata?.revenueProjection || "90,000",
             expenses: "35,000",
             netProfit: "55,000",
             breakEven: "10 months"
         },
         riskAssessment: {
-            level: "Medium",
+            level: dbProject?.metadata?.riskLevel || "Medium",
             volatility: "Moderate",
             weatherDep: "High (Rain-fed)",
             competition: "Low"
@@ -161,8 +319,13 @@ export default function ProjectDetails() {
                         horizontal
                         pagingEnabled
                         showsHorizontalScrollIndicator={false}
+                        onScroll={(e) => {
+                            const index = Math.round(e.nativeEvent.contentOffset.x / width);
+                            setActiveImageIndex(index);
+                        }}
+                        scrollEventThrottle={16}
                     >
-                        {project.images.map((img, index) => (
+                        {project.images.map((img: string, index: number) => (
                             <ImageBackground
                                 key={index}
                                 source={{ uri: img }}
@@ -186,49 +349,151 @@ export default function ProjectDetails() {
                                                 <Text style={styles.catText}>{project.category}</Text>
                                             </View>
                                             <Text style={styles.title}>{project.title}</Text>
+                                            {isManagedLands && (
+                                                <Text style={{ color: COLORS.white, fontSize: 14, fontWeight: '600', marginTop: 4 }}>
+                                                    {project.location}, {project.landInfo?.county}, {project.landInfo?.size}
+                                                </Text>
+                                            )}
                                         </View>
                                     </SafeAreaView>
                                 </View>
                             </ImageBackground>
                         ))}
                     </ScrollView>
+
+                    {/* Pagination Dots & Counter */}
+                    <View style={styles.paginationContainer}>
+                        <View style={styles.dotsRow}>
+                            {project.images.map((_: string, index: number) => (
+                                <View
+                                    key={index}
+                                    style={[
+                                        styles.dot,
+                                        activeImageIndex === index && styles.dotActive
+                                    ]}
+                                />
+                            ))}
+                        </View>
+                        <View style={styles.slideCounter}>
+                            <Text style={styles.slideCounterText}>{activeImageIndex + 1}/{project.images.length}</Text>
+                        </View>
+                    </View>
                 </View>
 
                 {/* Main Content */}
                 <View style={styles.content}>
-                    {/* Stats Card */}
-                    <View style={styles.statsCard}>
-                        <View style={styles.statsRow}>
-                            <View style={styles.statItem}>
-                                <Text style={styles.statLabel}>Target ROI</Text>
-                                <Text style={styles.statValue}>{project.roi}</Text>
-                            </View>
-                            <View style={styles.statDivider} />
-                            <View style={styles.statItem}>
-                                <Text style={styles.statLabel}>Tenure</Text>
-                                <Text style={styles.statValue}>{project.tenure}</Text>
-                            </View>
-                            <View style={styles.statDivider} />
-                            <View style={styles.statItem}>
-                                <Text style={styles.statLabel}>Investors</Text>
-                                <Text style={styles.statValue}>{project.investors}</Text>
+                    {/* Stats Card - Hidden globally */}
+                    {false && (
+                        <View style={styles.statsCard}>
+                            <View style={styles.statsRow}>
+                                <View style={styles.statItem}>
+                                    <Text style={styles.statLabel}>Target ROI</Text>
+                                    <Text style={styles.statValue}>{project.roi}</Text>
+                                </View>
+                                <View style={styles.statDivider} />
+                                <View style={styles.statItem}>
+                                    <Text style={styles.statLabel}>Tenure</Text>
+                                    <Text style={styles.statValue}>{project.tenure}</Text>
+                                </View>
+                                <View style={styles.statDivider} />
+                                <View style={styles.statItem}>
+                                    <Text style={styles.statLabel}>Investors</Text>
+                                    <Text style={styles.statValue}>{project.investors}</Text>
+                                </View>
                             </View>
                         </View>
-                    </View>
+                    )}
+
+                    {/* Managed Lands, Build/Buy & Utilities - Simple Information */}
+                    {(isManagedLands || isUtilities) && (
+                        <View style={styles.statsCard}>
+                            <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.primary, marginBottom: 16 }}>
+                                {isBuildOrBuy ? 'Property Details' : (isUtilities ? 'Product Details' : 'Land Details')}
+                            </Text>
+
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
+                                <View style={{ alignItems: 'center', flex: 1 }}>
+                                    <Text style={{ fontSize: 22, fontWeight: '800', color: COLORS.secondary }}>
+                                        {isUtilities ? (project as any).productInfo?.price : project.landInfo?.price}
+                                    </Text>
+                                    <Text style={{ fontSize: 12, color: COLORS.textLight, fontWeight: '600', marginTop: 2 }}>PRICE</Text>
+                                </View>
+                                <View style={{ width: 1, height: 40, backgroundColor: 'rgba(0,0,0,0.05)' }} />
+                                <View style={{ alignItems: 'center', flex: 1 }}>
+                                    <Text style={{ fontSize: 22, fontWeight: '800', color: COLORS.primary }}>
+                                        {isUtilities ? (project as any).productInfo?.condition : project.landInfo?.size}
+                                    </Text>
+                                    <Text style={{ fontSize: 12, color: COLORS.textLight, fontWeight: '600', marginTop: 2 }}>
+                                        {isUtilities ? "CONDITION" : (id === "prop003" || id === "prop006" ? "UNITS" : id === "prop004" ? "ROOMS" : id === "prop005" ? "AREA" : "SIZE")}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <View style={{ gap: 12 }}>
+                                {isUtilities ? (
+                                    <>
+                                        {[
+                                            { icon: 'shield-outline', label: 'Warranty', value: (project as any).productInfo?.warranty },
+                                            { icon: 'bus-outline', label: 'Delivery', value: (project as any).productInfo?.delivery },
+                                            { icon: 'person-outline', label: 'Seller', value: project.developer },
+                                        ].map((item: any, idx: number) => (
+                                            <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: idx < 2 ? 1 : 0, borderBottomColor: 'rgba(0,0,0,0.04)' }}>
+                                                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.heritage, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                                                    <Ionicons name={item.icon as any} size={18} color={COLORS.secondary} />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={{ fontSize: 12, color: COLORS.textLight, fontWeight: '500', marginBottom: 2 }}>{item.label}</Text>
+                                                    <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.primary }}>{item.value}</Text>
+                                                </View>
+                                            </View>
+                                        ))}
+                                    </>
+                                ) : (
+                                    <>
+                                        {project.landInfo?.income && (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.heritage, padding: 12, borderRadius: 12, marginBottom: 4 }}>
+                                                <Ionicons name="trending-up" size={20} color={COLORS.secondary} style={{ marginRight: 12 }} />
+                                                <View>
+                                                    <Text style={{ fontSize: 12, color: COLORS.textLight, fontWeight: '600' }}>EST. MONTHLY REVENUE</Text>
+                                                    <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.primary }}>{project.landInfo.income}</Text>
+                                                </View>
+                                            </View>
+                                        )}
+                                        {[
+                                            { icon: 'location-outline', label: 'Location', value: project.landInfo?.location },
+                                            { icon: 'document-text-outline', label: 'Title Deed', value: project.landInfo?.titleDeed },
+                                            { icon: 'navigate-outline', label: 'Nearest Town', value: project.landInfo?.nearestTown },
+                                            { icon: 'construct-outline', label: 'Utilities & Infrastructure', value: project.landInfo?.utilities },
+                                        ].map((item: any, idx: number) => (
+                                            <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: idx < 3 ? 1 : 0, borderBottomColor: 'rgba(0,0,0,0.04)' }}>
+                                                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.heritage, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                                                    <Ionicons name={item.icon as any} size={18} color={COLORS.secondary} />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={{ fontSize: 12, color: COLORS.textLight, fontWeight: '500', marginBottom: 2 }}>{item.label}</Text>
+                                                    <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.primary }}>{item.value}</Text>
+                                                </View>
+                                            </View>
+                                        ))}
+                                    </>
+                                )}
+                            </View>
+                        </View>
+                    )}
 
                     {/* Progress Section */}
-                    {!isBusiness && (
+                    {!isBusiness && !isManagedLands && !isVehicle && !isUtilities && (
                         <View style={styles.section}>
                             <View style={styles.fundingHeader}>
-                                <Text style={styles.sectionTitle}>{isInfrastructure ? "Construction Progress" : "Funding Status"}</Text>
+                                <Text style={styles.sectionTitle}>{isUtilities ? "Construction Progress" : "Funding Status"}</Text>
                                 <Text style={styles.progressPercent}>{Math.round(project.progress * 100)}%</Text>
                             </View>
                             <View style={styles.progressBarBg}>
                                 <View style={[styles.progressBarFill, { width: `${project.progress * 100}%` }]} />
                             </View>
                             <View style={styles.fundingFooter}>
-                                <Text style={styles.raisedValue}>{project.fundinged}</Text>
-                                <Text style={styles.targetLabel}>{isInfrastructure ? "Current Phase" : "Target"}: {project.target}</Text>
+                                <Text style={styles.raisedValue}>{formatCurrency(convertCurrency(dbProject?.currentAmount || 0, "KES", preferredCurrency), preferredCurrency, currencySymbol)} raised</Text>
+                                <Text style={styles.targetLabel}>{isUtilities ? "Current Phase" : "Target"}: {formatCurrency(convertCurrency(dbProject?.targetAmount || 0, "KES", preferredCurrency), preferredCurrency, currencySymbol)}</Text>
                             </View>
                         </View>
                     )}
@@ -240,71 +505,27 @@ export default function ProjectDetails() {
                             <View style={styles.section}>
                                 <Text style={styles.sectionTitle}>💰 Capital Breakdown</Text>
                                 <View style={styles.projectionCard}>
-                                    {project.capitalBreakdown?.map((item, idx) => (
+                                    {project.capitalBreakdown?.map((item: any, idx: number) => (
                                         <View key={idx} style={styles.projectionRow}>
                                             <Text style={styles.projectionLabel}>{item.label}</Text>
-                                            <Text style={styles.projectionValue}>KES {item.value}</Text>
+                                            <Text style={styles.projectionValue}>{formatCurrency(convertCurrency(parseInt(item.value.replace(/[^0-9]/g, '')), "KES", preferredCurrency), preferredCurrency, currencySymbol)}</Text>
                                         </View>
                                     ))}
                                     <View style={[styles.importDivider, { marginVertical: 8 }]} />
                                     <View style={styles.projectionRow}>
                                         <Text style={[styles.projectionLabel, { color: COLORS.white, fontWeight: '700' }]}>Total Capital</Text>
-                                        <Text style={[styles.projectionValue, { color: COLORS.white, fontSize: 18 }]}>KES 400,000</Text>
+                                        <Text style={[styles.projectionValue, { color: COLORS.white, fontSize: 18 }]}>{formatCurrency(convertCurrency(400000, "KES", preferredCurrency), preferredCurrency, currencySymbol)}</Text>
                                     </View>
                                 </View>
                             </View>
 
-                            {/* Revenue Projection */}
-                            <View style={styles.section}>
-                                <Text style={styles.sectionTitle}>📈 Monthly Projections</Text>
-                                <View style={[styles.projectionCard, { backgroundColor: COLORS.secondary }]}>
-                                    <View style={styles.projectionRow}>
-                                        <Text style={styles.projectionLabel}>Est. Monthly Revenue</Text>
-                                        <Text style={styles.projectionValue}>KES {project.revenueProjection?.monthly}</Text>
-                                    </View>
-                                    <View style={styles.projectionRow}>
-                                        <Text style={styles.projectionLabel}>Est. Expenses</Text>
-                                        <Text style={styles.projectionValue}>KES {project.revenueProjection?.expenses}</Text>
-                                    </View>
-                                    <View style={styles.importDivider} />
-                                    <View style={styles.projectionRow}>
-                                        <Text style={[styles.projectionLabel, { color: COLORS.white, fontWeight: '700' }]}>Net Monthly Profit</Text>
-                                        <Text style={[styles.projectionValue, { color: COLORS.white, fontSize: 18 }]}>KES {project.revenueProjection?.netProfit}</Text>
-                                    </View>
-                                    <View style={[styles.projectionRow, { marginTop: 8 }]}>
-                                        <Text style={[styles.projectionLabel, { color: 'rgba(255,255,255,0.6)' }]}>Break-even Period</Text>
-                                        <Text style={[styles.projectionValue, { color: COLORS.success }]}>{project.revenueProjection?.breakEven}</Text>
-                                    </View>
-                                </View>
-                            </View>
 
-                            {/* Risk Assessment */}
-                            <View style={styles.section}>
-                                <Text style={styles.sectionTitle}>⚠️ Risk Assessment</Text>
-                                <View style={styles.reFeaturesGrid}>
-                                    <View style={styles.reFeatureBox}>
-                                        <Ionicons name="warning-outline" size={24} color={COLORS.primary} />
-                                        <Text style={styles.reFeatureValue}>{project.riskAssessment?.level}</Text>
-                                        <Text style={styles.reFeatureLabel}>Risk Level</Text>
-                                    </View>
-                                    <View style={styles.reFeatureBox}>
-                                        <Ionicons name="trending-down-outline" size={24} color={COLORS.primary} />
-                                        <Text style={styles.reFeatureValue}>{project.riskAssessment?.competition}</Text>
-                                        <Text style={styles.reFeatureLabel}>Competition</Text>
-                                    </View>
-                                    <View style={styles.reFeatureBox}>
-                                        <Ionicons name="cloud-outline" size={24} color={COLORS.primary} />
-                                        <Text style={styles.reFeatureValue}>High</Text>
-                                        <Text style={styles.reFeatureLabel}>Weather Dep.</Text>
-                                    </View>
-                                </View>
-                            </View>
 
                             {/* Licenses */}
                             <View style={styles.section}>
                                 <Text style={styles.sectionTitle}>📜 Required Licenses</Text>
                                 <View style={styles.tagsContainer}>
-                                    {project.licenses?.map((license, idx) => (
+                                    {project.licenses?.map((license: string, idx: number) => (
                                         <View key={idx} style={styles.licenseTag}>
                                             <Ionicons name="shield-checkmark-outline" size={16} color={COLORS.secondary} />
                                             <Text style={styles.licenseTagText}>{license}</Text>
@@ -313,52 +534,63 @@ export default function ProjectDetails() {
                                 </View>
                             </View>
 
-                            {/* Recommended Counties */}
-                            <View style={styles.section}>
-                                <Text style={styles.sectionTitle}>📍 Recommended Counties</Text>
-                                <View style={styles.tagsContainer}>
-                                    {project.recommendedCounties?.map((county, idx) => (
-                                        <View key={idx} style={[styles.licenseTag, { backgroundColor: COLORS.primary + '10' }]}>
-                                            <Ionicons name="location-outline" size={16} color={COLORS.primary} />
-                                            <Text style={[styles.licenseTagText, { color: COLORS.primary }]}>{county}</Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            </View>
                         </>
                     )}
 
-                    {/* Infrastructure Milestones */}
-                    {isInfrastructure && (
+
+
+
+
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>{isVehicle ? 'About This Vehicle' : (isBuildOrBuy ? 'About This Property' : (isManagedLands ? 'About This Land' : 'About Investment'))}</Text>
+                        <Text style={styles.description}>{project.description}</Text>
+                    </View>
+
+                    {/* Project Status Timeline (Construction) */}
+                    {isBuildOrBuy && project.milestones && (
                         <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Project Milestones</Text>
+                            <View style={styles.sectionHeaderRow}>
+                                <Text style={styles.sectionTitle}>Project Progress Updates</Text>
+                                <TouchableOpacity>
+                                    <Text style={styles.viewAllLink}>View Admin Log</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <Text style={styles.sectionSubtitle}>
+                                Periodic updates from the site supervisor and project admin.
+                            </Text>
+
                             <View style={styles.milestoneContainer}>
-                                {project.milestones?.map((m, idx) => (
-                                    <View key={m.id} style={styles.milestoneRow}>
+                                {project.milestones.map((milestone: any, index: number) => (
+                                    <View key={milestone.id} style={styles.milestoneRow}>
                                         <View style={styles.milestoneLeft}>
                                             <View style={[
                                                 styles.milestoneDot,
-                                                m.status === "Completed" && styles.milestoneDotCompleted,
-                                                m.status === "In Progress" && styles.milestoneDotActive
+                                                milestone.status === "Completed" && styles.milestoneDotCompleted,
+                                                milestone.status === "In Progress" && styles.milestoneDotActive
                                             ]} />
-                                            {idx < (project.milestones?.length || 0) - 1 && <View style={styles.milestoneLine} />}
+                                            {index < project.milestones.length - 1 && <View style={styles.milestoneLine} />}
                                         </View>
                                         <View style={styles.milestoneRight}>
                                             <View style={styles.milestoneTextContent}>
                                                 <Text style={[
                                                     styles.milestoneTitle,
-                                                    m.status === "Completed" && styles.milestoneTitleCompleted
-                                                ]}>{m.title}</Text>
-                                                <Text style={styles.milestoneDate}>{m.date} • {m.status}</Text>
+                                                    milestone.status === "Completed" && styles.milestoneTitleCompleted
+                                                ]}>
+                                                    {milestone.title}
+                                                </Text>
+                                                <Text style={styles.milestoneDate}>{milestone.date} • {milestone.status}</Text>
                                             </View>
-                                            {m.media && (
-                                                <TouchableOpacity style={styles.milestoneMedia}>
-                                                    <ImageBackground source={{ uri: m.media }} style={styles.milestoneImage} imageStyle={{ borderRadius: 12 }}>
+                                            {milestone.media && (
+                                                <View style={styles.milestoneMedia}>
+                                                    <ImageBackground
+                                                        source={{ uri: milestone.media }}
+                                                        style={styles.milestoneImage}
+                                                    >
                                                         <View style={styles.mediaOverlay}>
-                                                            <Ionicons name="play-circle" size={24} color={COLORS.white} />
+                                                            <Ionicons name="image-outline" size={20} color={COLORS.white} />
                                                         </View>
                                                     </ImageBackground>
-                                                </TouchableOpacity>
+                                                </View>
                                             )}
                                         </View>
                                     </View>
@@ -366,77 +598,6 @@ export default function ProjectDetails() {
                             </View>
                         </View>
                     )}
-
-                    {/* Materials Marketplace (Infrastructure) */}
-                    {isInfrastructure && (
-                        <View style={styles.section}>
-                            <View style={styles.sectionHeaderRow}>
-                                <Text style={styles.sectionTitle}>Materials & Products</Text>
-                                <TouchableOpacity>
-                                    <Text style={styles.viewAllLink}>Partner Pricing</Text>
-                                </TouchableOpacity>
-                            </View>
-                            <Text style={styles.sectionSubtitle}>Purchase quality materials directly via Zamani partners.</Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.materialsScroll}>
-                                {project.materials?.map(item => (
-                                    <TouchableOpacity
-                                        key={item.id}
-                                        style={[
-                                            styles.materialCard,
-                                            selectedMaterials.includes(item.id) && styles.materialCardSelected
-                                        ]}
-                                        onPress={() => {
-                                            if (selectedMaterials.includes(item.id)) {
-                                                setSelectedMaterials(selectedMaterials.filter(id => id !== item.id));
-                                            } else {
-                                                setSelectedMaterials([...selectedMaterials, item.id]);
-                                            }
-                                        }}
-                                    >
-                                        <View style={styles.materialIcon}>
-                                            <Ionicons name={item.icon as any} size={24} color={COLORS.primary} />
-                                        </View>
-                                        <Text style={styles.materialName}>{item.name}</Text>
-                                        <Text style={styles.materialPrice}>KSh {item.price.toLocaleString()}</Text>
-                                        <Text style={styles.materialUnit}>per {item.unit}</Text>
-                                        <View style={[
-                                            styles.materialCheck,
-                                            selectedMaterials.includes(item.id) && styles.materialCheckActive
-                                        ]}>
-                                            <Ionicons
-                                                name={selectedMaterials.includes(item.id) ? "checkmark" : "add"}
-                                                size={16}
-                                                color={selectedMaterials.includes(item.id) ? COLORS.white : COLORS.primary}
-                                            />
-                                        </View>
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-
-                            {selectedMaterials.length > 0 && (
-                                <View style={styles.costSummary}>
-                                    <View style={styles.costRow}>
-                                        <Text style={styles.costLabel}>Selected Supplies ({selectedMaterials.length})</Text>
-                                        <Text style={styles.costValue}>
-                                            KSh {project.materials
-                                                ?.filter(m => selectedMaterials.includes(m.id))
-                                                .reduce((sum, m) => sum + m.price, 0)
-                                                .toLocaleString()}
-                                        </Text>
-                                    </View>
-                                    <TouchableOpacity style={styles.checkoutBtn}>
-                                        <Text style={styles.checkoutBtnText}>Order Materials</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-                        </View>
-                    )}
-
-                    {/* About Section */}
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>About Investment</Text>
-                        <Text style={styles.description}>{project.description}</Text>
-                    </View>
 
                     {/* Property Features (Real Estate) */}
                     {project.category === "Real Estate" && (
@@ -487,12 +648,23 @@ export default function ProjectDetails() {
                                     <Text style={styles.reFeatureValue}>{project.engine}</Text>
                                     <Text style={styles.reFeatureLabel}>Engine</Text>
                                 </View>
+                                <View style={styles.reFeatureBox}>
+                                    <Ionicons name="shield-outline" size={24} color={COLORS.primary} />
+                                    <Text style={styles.reFeatureValue}>{dbProject?.metadata?.condition || "New"}</Text>
+                                    <Text style={styles.reFeatureLabel}>Cond.</Text>
+                                </View>
+                                <View style={styles.reFeatureBox}>
+                                    <Ionicons name="globe-outline" size={24} color={COLORS.primary} />
+                                    <Text style={styles.reFeatureValue}>{dbProject?.metadata?.source || "Local"}</Text>
+                                    <Text style={styles.reFeatureLabel}>Source</Text>
+                                </View>
                             </View>
                         </View>
                     )}
 
                     {/* Projections Section */}
-                    {project.category !== "Vehicle Sourcing" && (
+                    {/* Projections Section - Hidden globally */}
+                    {false && (
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>Financial Projections</Text>
                             <View style={styles.projectionCard}>
@@ -544,110 +716,133 @@ export default function ProjectDetails() {
 
                     {/* Developer Section */}
                     <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Developer</Text>
+                        <Text style={styles.sectionTitle}>{(isVehicle || isUtilities) ? "Seller" : "Developer"}</Text>
                         <View style={styles.developerCard}>
                             <View style={styles.developerIcon}>
                                 <Ionicons name="business" size={24} color={COLORS.white} />
                             </View>
                             <View>
                                 <Text style={styles.developerName}>{project.developer}</Text>
-                                <View style={styles.verifiedTag}>
-                                    <Ionicons name="checkmark-circle" size={12} color={COLORS.success} />
-                                    <Text style={styles.verifiedTagText}>PLATINUM DEVELOPER</Text>
-                                </View>
+                                {!isBusiness && (
+                                    <View style={styles.verifiedTag}>
+                                        <Ionicons name="checkmark-circle" size={12} color={COLORS.success} />
+                                        <Text style={styles.verifiedTagText}>{(isVehicle || isUtilities) ? "VERIFIED SELLER" : "PLATINUM DEVELOPER"}</Text>
+                                    </View>
+                                )}
                             </View>
                         </View>
-                    </View>
-
-                    {/* Investment Options Selector */}
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Investment Model</Text>
-                        <View style={styles.investmentGrid}>
-                            {[
-                                { id: "Fractional", label: "Fractional", icon: "pie-chart-outline" },
-                                { id: "Installments", label: "Installments", icon: "calendar-outline" },
-                                { id: "Full", label: "Full Purchase", icon: "key-outline" }
-                            ].map((type) => (
-                                <TouchableOpacity
-                                    key={type.id}
-                                    style={[
-                                        styles.investmentOption,
-                                        selectedInvestmentType === type.id && styles.selectedInvestmentOption
-                                    ]}
-                                    onPress={() => setSelectedInvestmentType(type.id)}
-                                >
-                                    <View style={[
-                                        styles.investmentIcon,
-                                        selectedInvestmentType === type.id && styles.selectedInvestmentIcon
-                                    ]}>
-                                        <Ionicons
-                                            name={type.icon as any}
-                                            size={20}
-                                            color={selectedInvestmentType === type.id ? COLORS.white : COLORS.primary}
-                                        />
-                                    </View>
-                                    <Text style={[
-                                        styles.investmentLabel,
-                                        selectedInvestmentType === type.id && styles.selectedInvestmentLabel
-                                    ]}>{type.label}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        {/* Special Financing or Progress-based Info */}
-                        {selectedInvestmentType === "Installments" && (isVehicle || isInfrastructure) && (
-                            <View style={[styles.projectionCard, { marginTop: 12, backgroundColor: "rgba(10, 31, 68, 0.05)" }]}>
-                                <View style={styles.projectionRow}>
-                                    <Ionicons name={isInfrastructure ? "trending-up-outline" : "card-outline"} size={20} color={COLORS.primary} />
-                                    <Text style={[styles.projectionLabel, { color: COLORS.primary, fontWeight: '700', marginLeft: 8 }]}>
-                                        {isInfrastructure ? "Milestone-Based Payment" : "Partner Financing (NCBA)"}
-                                    </Text>
+                        {isManagedLands && (
+                            <View style={{ marginTop: 16, backgroundColor: COLORS.white, padding: 16, borderRadius: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 12, color: COLORS.textLight, fontWeight: '600', marginBottom: 4 }}>REACH OUT</Text>
+                                    <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.primary }}>{(project as any).contactPhone}</Text>
+                                    <Text style={{ fontSize: 14, color: COLORS.textLight, marginTop: 2 }}>{(project as any).contactEmail}</Text>
                                 </View>
-                                {isInfrastructure ? (
-                                    <>
-                                        <View style={[styles.projectionRow, { marginTop: 12 }]}>
-                                            <Text style={styles.projectionLabel}>Booking Fee</Text>
-                                            <Text style={[styles.projectionValue, { color: COLORS.primary }]}>KSh 100,000</Text>
-                                        </View>
-                                        <View style={styles.projectionRow}>
-                                            <Text style={styles.projectionLabel}>Installment Frequency</Text>
-                                            <Text style={[styles.projectionValue, { color: COLORS.primary }]}>Quarterly</Text>
-                                        </View>
-                                        <View style={styles.projectionRow}>
-                                            <Text style={styles.projectionLabel}>Trigger Event</Text>
-                                            <Text style={[styles.projectionValue, { color: COLORS.primary }]}>Milestone Completion</Text>
-                                        </View>
-                                    </>
-                                ) : (
-                                    <>
-                                        <View style={[styles.projectionRow, { marginTop: 12 }]}>
-                                            <Text style={styles.projectionLabel}>Min Deposit</Text>
-                                            <Text style={[styles.projectionValue, { color: COLORS.primary }]}>30%</Text>
-                                        </View>
-                                        <View style={styles.projectionRow}>
-                                            <Text style={styles.projectionLabel}>Annual Interest</Text>
-                                            <Text style={[styles.projectionValue, { color: COLORS.primary }]}>12.5%</Text>
-                                        </View>
-                                        <View style={styles.projectionRow}>
-                                            <Text style={styles.projectionLabel}>Tenure</Text>
-                                            <Text style={[styles.projectionValue, { color: COLORS.primary }]}>Up to 36 Months</Text>
-                                        </View>
-                                    </>
-                                )}
+                                <TouchableOpacity
+                                    style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.secondary, justifyContent: 'center', alignItems: 'center' }}
+                                    onPress={() => {
+                                        // Optional: Add linking to phone dialer if phone exists
+                                    }}
+                                >
+                                    <Ionicons name="call" size={20} color={COLORS.white} />
+                                </TouchableOpacity>
                             </View>
                         )}
                     </View>
 
-                    {/* Trust Section */}
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Trust & Verification</Text>
-                        {project.impact.map((item, index) => (
-                            <View key={index} style={styles.impactItem}>
-                                <Ionicons name="shield-checkmark" size={20} color={COLORS.secondary} />
-                                <Text style={styles.impactText}>{item}</Text>
+                    {/* Investment Options Selector - hidden for Business */}
+                    {!isBusiness && (
+                        <View style={styles.section}>
+                            <Text style={styles.sectionTitle}>Investment Model</Text>
+                            <View style={styles.investmentGrid}>
+                                {[
+                                    { id: "Fractional", label: "Fractional", icon: "pie-chart-outline" },
+                                    { id: "Installments", label: "Installments", icon: "calendar-outline" },
+                                    { id: "Full", label: "Full Purchase", icon: "key-outline" }
+                                ].map((type: any) => (
+                                    <TouchableOpacity
+                                        key={type.id}
+                                        style={[
+                                            styles.investmentOption,
+                                            selectedInvestmentType === type.id && styles.selectedInvestmentOption
+                                        ]}
+                                        onPress={() => setSelectedInvestmentType(type.id)}
+                                    >
+                                        <View style={[
+                                            styles.investmentIcon,
+                                            selectedInvestmentType === type.id && styles.selectedInvestmentIcon
+                                        ]}>
+                                            <Ionicons
+                                                name={type.icon as any}
+                                                size={20}
+                                                color={selectedInvestmentType === type.id ? COLORS.white : COLORS.primary}
+                                            />
+                                        </View>
+                                        <Text style={[
+                                            styles.investmentLabel,
+                                            selectedInvestmentType === type.id && styles.selectedInvestmentLabel
+                                        ]}>{type.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
                             </View>
-                        ))}
-                    </View>
+
+                            {/* Special Financing or Progress-based Info */}
+                            {selectedInvestmentType === "Installments" && (isVehicle || isUtilities) && (
+                                <View style={[styles.projectionCard, { marginTop: 12, backgroundColor: "rgba(10, 31, 68, 0.05)" }]}>
+                                    <View style={styles.projectionRow}>
+                                        <Ionicons name={isUtilities ? "trending-up-outline" : "card-outline"} size={20} color={COLORS.primary} />
+                                        <Text style={[styles.projectionLabel, { color: COLORS.primary, fontWeight: '700', marginLeft: 8 }]}>
+                                            {isUtilities ? "Milestone-Based Payment" : "Partner Financing (NCBA)"}
+                                        </Text>
+                                    </View>
+                                    {isUtilities ? (
+                                        <>
+                                            <View style={[styles.projectionRow, { marginTop: 12 }]}>
+                                                <Text style={styles.projectionLabel}>Booking Fee</Text>
+                                                <Text style={[styles.projectionValue, { color: COLORS.primary }]}>KSh 100,000</Text>
+                                            </View>
+                                            <View style={styles.projectionRow}>
+                                                <Text style={styles.projectionLabel}>Installment Frequency</Text>
+                                                <Text style={[styles.projectionValue, { color: COLORS.primary }]}>Quarterly</Text>
+                                            </View>
+                                            <View style={styles.projectionRow}>
+                                                <Text style={styles.projectionLabel}>Trigger Event</Text>
+                                                <Text style={[styles.projectionValue, { color: COLORS.primary }]}>Milestone Completion</Text>
+                                            </View>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <View style={[styles.projectionRow, { marginTop: 12 }]}>
+                                                <Text style={styles.projectionLabel}>Min Deposit</Text>
+                                                <Text style={[styles.projectionValue, { color: COLORS.primary }]}>30%</Text>
+                                            </View>
+                                            <View style={styles.projectionRow}>
+                                                <Text style={styles.projectionLabel}>Annual Interest</Text>
+                                                <Text style={[styles.projectionValue, { color: COLORS.primary }]}>12.5%</Text>
+                                            </View>
+                                            <View style={styles.projectionRow}>
+                                                <Text style={styles.projectionLabel}>Tenure</Text>
+                                                <Text style={[styles.projectionValue, { color: COLORS.primary }]}>Up to 36 Months</Text>
+                                            </View>
+                                        </>
+                                    )}
+                                </View>
+                            )}
+                        </View>
+                    )}
+
+                    {/* Trust Section - Hidden globally */}
+                    {false && (
+                        <View style={styles.section}>
+                            <Text style={styles.sectionTitle}>Trust & Verification</Text>
+                            {project.impact.map((item: string, index: number) => (
+                                <View key={index} style={styles.impactItem}>
+                                    <Ionicons name="shield-checkmark" size={20} color={COLORS.secondary} />
+                                    <Text style={styles.impactText}>{item}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
                 </View>
 
                 {/* Spacing for button */}
@@ -658,24 +853,43 @@ export default function ProjectDetails() {
             <View style={styles.footer}>
                 <TouchableOpacity
                     style={styles.stakeBtn}
-                    onPress={() => router.push({
-                        pathname: isBusiness ? "/savings/create-goal" : "/projects/start",
-                        params: isBusiness ? {
-                            title: project.title,
-                            target: "400000",
-                            category: "Business",
-                            id: project.id,
-                            capitalBreakdown: JSON.stringify(project.capitalBreakdown),
-                            revenueProjection: JSON.stringify(project.revenueProjection),
-                            riskLevel: project.riskAssessment?.level,
-                            image: project.images[0]
-                        } : { id: project.id, mode: selectedInvestmentType }
-                    } as any)}
+                    onPress={() => {
+                        if (isManagedLands || isUtilities) {
+                            router.push({
+                                pathname: "/projects/pay",
+                                params: {
+                                    id: id,
+                                    title: project.title,
+                                    price: isUtilities ? displayProductPriceNum : (project.landInfo?.priceNum || parsePrice(project.landInfo?.price)),
+                                    location: project.location,
+                                    category: project.category,
+                                    selectedPlan: selectedInvestmentType // Pass the selected plan down to the payment screen
+                                }
+                            } as any);
+                        } else {
+                            router.push({
+                                pathname: isBusiness ? "/savings/create-goal" : "/projects/start",
+                                params: isBusiness ? {
+                                    title: project.title,
+                                    target: "400000",
+                                    category: "Business",
+                                    id: project.id,
+                                    capitalBreakdown: JSON.stringify(project.capitalBreakdown),
+                                    revenueProjection: JSON.stringify(project.revenueProjection),
+                                    riskLevel: project.riskAssessment?.level,
+                                    image: project.images[0]
+                                } : { id: project.id, mode: selectedInvestmentType }
+                            } as any);
+                        }
+                    }}
                 >
                     <Text style={styles.stakeBtnText}>
-                        {isBusiness ? "Start Professional Saving Plan" : (selectedInvestmentType === "Full" ? "Proceed to Purchase" : "Start Investment")}
+                        {active === 'true' ? "Continue Investing" :
+                            (isManagedLands ? "Proceed to Payment" :
+                                isUtilities ? "Continue Payment" :
+                                    (isBusiness ? "Start Professional Saving Plan" : (selectedInvestmentType === "Full" ? "Proceed to Purchase" : "Start Investment")))}
                     </Text>
-                    <Ionicons name={isBusiness ? "rocket" : "flash"} size={20} color={COLORS.white} />
+                    <Ionicons name={isManagedLands ? "card" : (isBusiness ? "rocket" : "flash")} size={20} color={COLORS.white} />
                 </TouchableOpacity>
             </View>
         </View>
@@ -690,6 +904,42 @@ const styles = StyleSheet.create({
     heroContainer: {
         height: 400,
         backgroundColor: COLORS.primary,
+    },
+    paginationContainer: {
+        position: 'absolute',
+        bottom: 50,
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 12,
+    },
+    dotsRow: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    dot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: 'rgba(255,255,255,0.4)',
+    },
+    dotActive: {
+        width: 24,
+        backgroundColor: COLORS.white,
+        borderRadius: 4,
+    },
+    slideCounter: {
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    slideCounterText: {
+        color: COLORS.white,
+        fontSize: 12,
+        fontWeight: '600',
     },
     heroImage: {
         height: 400,
@@ -880,10 +1130,12 @@ const styles = StyleSheet.create({
     },
     reFeaturesGrid: {
         flexDirection: "row",
+        flexWrap: "wrap",
         gap: 12,
     },
     reFeatureBox: {
-        flex: 1,
+        width: (width - 72) / 3, // Roughly 3 per row with gap
+        minWidth: 100,
         backgroundColor: COLORS.white,
         padding: 16,
         borderRadius: 20,

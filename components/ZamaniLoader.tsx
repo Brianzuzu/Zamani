@@ -1,12 +1,12 @@
 import React, { useEffect } from 'react';
-import { View, Image, StyleSheet, Animated, Easing } from 'react-native';
+import { View, StyleSheet, Animated, Easing } from 'react-native';
 
 const COLORS = {
     heritage: "#F5EFE7", // Savannah Stone
 };
 
 export const ZamaniLoader = () => {
-    const scaleValue = new Animated.Value(0.8);
+    const scaleValue = React.useRef(new Animated.Value(0.8)).current;
 
     useEffect(() => {
         Animated.loop(
@@ -25,7 +25,7 @@ export const ZamaniLoader = () => {
                 }),
             ])
         ).start();
-    }, []);
+    }, [scaleValue]);
 
     return (
         <View style={styles.container}>

@@ -15,6 +15,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import { paymentService } from "../config/paymentService";
+import { auth } from "../config/firebase";
+import { Alert } from "react-native";
+import axios from "axios";
+import { API_URL } from "../config/authService";
+import { convertCurrency } from "../../constants/currency";
 
 const { width, height } = Dimensions.get("window");
 
@@ -46,6 +53,8 @@ export default function DepositScreen() {
     const [lockPeriod, setLockPeriod] = useState("Flexible (No Lock)");
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
+    const [userProfile, setUserProfile] = useState<any>(null);
+    const [exchangeRate, setExchangeRate] = useState(129.50);
 
     const lockOptions = ["Flexible (No Lock)", "3 Months", "6 Months", "12 Months", "24 Months"];
 
@@ -75,11 +84,34 @@ export default function DepositScreen() {
     const incrementDuration = () => setDuration(prev => prev + 1);
     const decrementDuration = () => setDuration(prev => Math.max(1, prev - 1));
 
+    // Fetch user profile and set dynamic exchange rate
+    useEffect(() => {
+        const fetchProfile = async () => {
+            try {
+                const token = await auth.currentUser?.getIdToken();
+                if (token) {
+                    const res = await axios.get(`${API_URL}/users/me`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    setUserProfile(res.data);
+                    
+                    // Set exchange rate based on preferred currency
+                    const currency = res.data.preferredCurrency || "USD";
+                    const rate = convertCurrency(1, currency, "KES");
+                    setExchangeRate(rate);
+                }
+            } catch (error) {
+                console.error("Error fetching profile in deposit:", error);
+            }
+        };
+        fetchProfile();
+    }, []);
+
     // Handle conversion when current amount changes
     useEffect(() => {
         const value = parseFloat(amount);
         if (!isNaN(value)) {
-            setHomeAmount((value * EXCHANGE_RATE).toLocaleString("en-KE", {
+            setHomeAmount((value * exchangeRate).toLocaleString("en-KE", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             }));
@@ -97,10 +129,58 @@ export default function DepositScreen() {
         }
     }, [frequency]);
 
-    const handleHandoff = () => {
-        setShowPaymentModal(false);
-        // Navigate to success or starting process
-        router.push("/(tabs)/savings");
+    const handleHandoff = async () => {
+        if (!selectedMethod) return;
+
+        try {
+            const user = auth.currentUser;
+            if (!user) {
+                Alert.alert("Error", "You must be logged in to deposit.");
+                return;
+            }
+
+            const val = parseFloat(amount);
+            if (isNaN(val) || val <= 0) {
+                Alert.alert("Error", "Please enter a valid amount.");
+                return;
+            }
+
+            // Convert local amount to KES for the backend
+            const amountInKES = Math.round(val * exchangeRate);
+
+            const methodMap: Record<string, string> = {
+                mpesa: "M-Pesa",
+                card: "Card",
+                bank: "Bank Transfer",
+                paypal: "Card",
+                apple_google: "Card"
+            };
+
+            const response = await paymentService.initialize({
+                amount: amountInKES,
+                currency: "KES",
+                email: user.email || "",
+                name: user.displayName || "Member",
+                type: "Deposit",
+                referenceId: params.id as string,
+                method: methodMap[selectedMethod || ""] || "Card"
+            });
+
+            if (response.status === "success" && response.link) {
+                setShowPaymentModal(false);
+                await WebBrowser.openBrowserAsync(response.link);
+                
+                router.replace({
+                    pathname: "/payment-status",
+                    params: { 
+                        reference: response.reference,
+                        type: "Deposit"
+                    }
+                } as any);
+            }
+        } catch (error: any) {
+            Alert.alert("Payment Error", error.message || "Failed to start payment.");
+        }
     };
 
     return (
@@ -113,7 +193,13 @@ export default function DepositScreen() {
                     <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>{isBusiness ? "Business Savings Plan" : "New Savings Plan"}</Text>
+                    <View style={styles.headerTitleContainer}>
+                        <Text style={styles.headerTitle}>{isBusiness ? "Business Plan" : "Savings Plan"}</Text>
+                        <View style={styles.testBadge}>
+                            <Ionicons name="flask" size={10} color="#FF9500" />
+                            <Text style={styles.testBadgeText}>TEST MODE</Text>
+                        </View>
+                    </View>
                     <View style={{ width: 40 }} />
                 </View>
 
@@ -148,7 +234,9 @@ export default function DepositScreen() {
                     <View style={styles.contextAlert}>
                         <Ionicons name="globe-outline" size={20} color={COLORS.primary} />
                         <Text style={styles.contextText}>
-                            You are currently in <Text style={{ fontWeight: '700' }}>USA</Text>. Payments will be made in <Text style={{ fontWeight: '700' }}>USD</Text> and converted to <Text style={{ fontWeight: '700' }}>KES</Text> for your business in Kenya.
+                            You are currently in <Text style={{ fontWeight: '700' }}>{userProfile?.currentCountry || "..."}</Text>. 
+                            Payments will be made in <Text style={{ fontWeight: '700' }}>{userProfile?.preferredCurrency || "..."}</Text> 
+                            and converted to <Text style={{ fontWeight: '700' }}>KES</Text> for your business in Kenya.
                         </Text>
                     </View>
                     {/* Currency Inputs */}
@@ -158,7 +246,7 @@ export default function DepositScreen() {
                         {/* Current Country (USA Context) */}
                         <View style={styles.inputContainer}>
                             <View style={styles.currencyBadge}>
-                                <Text style={styles.currencyText}>USD</Text>
+                                <Text style={styles.currencyText}>{userProfile?.preferredCurrency || "..."}</Text>
                             </View>
                             <TextInput
                                 style={styles.input}
@@ -173,7 +261,7 @@ export default function DepositScreen() {
                         <View style={styles.conversionSpacer}>
                             <Ionicons name="swap-vertical" size={20} color={COLORS.heritageAccent} />
                             <View style={styles.rateLine} />
-                            <Text style={styles.rateText}>1 USD ≈ {EXCHANGE_RATE} KES</Text>
+                            <Text style={styles.rateText}>1 {userProfile?.preferredCurrency || "..."} ≈ {exchangeRate} KES</Text>
                         </View>
 
                         {/* Home Country (Kenya Context) */}
@@ -793,5 +881,24 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: COLORS.primary,
         lineHeight: 18,
+    },
+    headerTitleContainer: {
+        alignItems: 'center',
+    },
+    testBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FF950015',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 6,
+        marginTop: 2,
+        gap: 4,
+    },
+    testBadgeText: {
+        color: '#FF9500',
+        fontSize: 10,
+        fontWeight: '800',
+        letterSpacing: 0.5,
     },
 });

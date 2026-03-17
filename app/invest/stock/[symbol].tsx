@@ -12,9 +12,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { marketData } from "../../data/market";
-import { userPortfolio } from "../../data/portfolio";
-import { placeOrder } from "../../data/trade";
+import { marketData } from "../../_data/market";
+import { userPortfolio } from "../../_data/portfolio";
+import { placeOrder } from "../../_data/trade";
 
 const { width } = Dimensions.get("window");
 
@@ -43,6 +43,13 @@ export default function StockDetailsScreen() {
     const estimatedCost = (Number(shares) || 0) * stock.price;
 
     const handleTrade = () => {
+        Alert.alert(
+            "Coming Soon",
+            `Trading for ${stock.symbol} is currently in sandbox mode. Performance tracking is active, but live orders are coming soon!`,
+            [{ text: "OK" }]
+        );
+        return;
+
         if (!shares || isNaN(Number(shares))) return;
 
         const order = placeOrder(

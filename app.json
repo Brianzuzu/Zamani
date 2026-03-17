@@ -14,9 +14,12 @@
     },
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.brianzuzu.zamani"
     },
     "android": {
+      "package": "com.brianzuzu.zamani",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE"
       },

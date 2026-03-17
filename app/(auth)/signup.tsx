@@ -10,12 +10,15 @@ import {
     ScrollView,
     StatusBar,
     Modal,
-    FlatList
+    FlatList,
+    Alert,
+    ActivityIndicator
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { COUNTRIES } from "../../constants/countries";
+import { authService } from "../config/authService";
 
 const COLORS = {
     primary: "#0A1F44", // Deep Blue
@@ -34,12 +37,13 @@ export default function Signup() {
     const router = useRouter();
     const [name, setName] = useState("Brian Mwichigi");
     const [email, setEmail] = useState("brianmwichigi@gmail.com");
-    const [phone, setPhone] = useState(""); // User didn't specify actual number, just context
+    const [phone, setPhone] = useState("");
     const [country, setCountry] = useState("United States of America");
     const [homeCountry, setHomeCountry] = useState("Kenya");
     const [password, setPassword] = useState("tiffany");
 
     // UI States
+    const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [countryModalVisible, setCountryModalVisible] = useState(false);
     const [selectionType, setSelectionType] = useState<"current" | "home">("current");
@@ -51,12 +55,6 @@ export default function Signup() {
         );
     }, [searchQuery]);
 
-    const handleSignup = () => {
-        // Mock signup logic
-        console.log("Signup with:", { name, email, phone, country, homeCountry });
-        router.replace("/home");
-    };
-
     const openCountryPicker = (type: "current" | "home") => {
         setSelectionType(type);
         setSearchQuery("");
@@ -64,12 +62,48 @@ export default function Signup() {
     };
 
     const selectCountry = (countryName: string) => {
+        const selectedCountryData = COUNTRIES.find(c => c.name === countryName);
         if (selectionType === "current") {
             setCountry(countryName);
+            // Optionally store current country currency if needed later
         } else {
             setHomeCountry(countryName);
         }
         setCountryModalVisible(false);
+    };
+
+    const handleSignup = async () => {
+        if (!name || !email || !password) {
+            Alert.alert("Error", "Please fill in all required fields.");
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            // Find currency info for current country
+            const currentCountryData = COUNTRIES.find(c => c.name === country);
+            const preferredCurrency = currentCountryData?.currency || "KES";
+            const currencySymbol = currentCountryData?.symbol || "KSh";
+
+            await authService.signup(name, email, password, {
+                phone,
+                currentCountry: country,
+                homeCountry,
+                preferredCurrency,
+                currencySymbol,
+                role: 'user'
+            });
+            Alert.alert(
+                "Account Created! 🎉",
+                "Your account has been created successfully. Please log in to continue.",
+                [{ text: "Log In", onPress: () => router.replace("/login") }]
+            );
+        } catch (error: any) {
+            console.error("Signup error:", error);
+            Alert.alert("Registration Failed", error.message || "An unexpected error occurred.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -201,8 +235,13 @@ export default function Signup() {
                             style={styles.signupButton}
                             onPress={handleSignup}
                             activeOpacity={0.8}
+                            disabled={isLoading}
                         >
-                            <Text style={styles.signupButtonText}>Create Account</Text>
+                            {isLoading ? (
+                                <ActivityIndicator color={COLORS.white} />
+                            ) : (
+                                <Text style={styles.signupButtonText}>Create Account</Text>
+                            )}
                         </TouchableOpacity>
 
                         <View style={styles.footer}>
@@ -387,12 +426,14 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 30,
         height: "80%",
         padding: 24,
+        paddingTop: 8,
     },
     modalHeader: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
         marginBottom: 20,
+        marginTop: 16,
     },
     modalTitle: {
         fontSize: 20,
