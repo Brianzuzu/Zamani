@@ -10,7 +10,7 @@ import { auth } from './firebase';
 import { Platform } from 'react-native';
 
 // Use EXPO_PUBLIC_ prefix to expose environment variables at build time
-export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://172.16.12.20:5000/api';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://zamani-backend.onrender.com/api';
 
 export const authService = {
     // Signup logic
